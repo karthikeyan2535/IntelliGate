@@ -1,17 +1,21 @@
 """
 Evaluation and Benchmark APIs for IntelliGate.
 Exposes empirical model performance profiles, evaluation suite runners,
-and prompt classification inspection.
+historical benchmark runs, and prompt classification inspection.
 """
 from __future__ import annotations
 
+import datetime
 from typing import Any, Dict, List, Optional
+import uuid
 from pydantic import BaseModel
 import structlog
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.auth import get_current_user
-from app.database.models import User
+from app.database.base import get_db
+from app.database.models import EvaluationRecord
 from app.evaluation.dataset import BENCHMARK_DATASET
 from app.evaluation.evaluator import BenchmarkEvaluator, EvaluationRunResult
 from app.evaluation.profiles import ModelPerformanceProfile, ProfileManager
@@ -33,9 +37,7 @@ class EvaluationRunRequest(BaseModel):
 
 
 @router.get("/profiles", summary="Get empirical model performance profiles")
-async def get_performance_profiles(
-    current_user: User = Depends(get_current_user),
-) -> List[Dict[str, Any]]:
+async def get_performance_profiles() -> List[Dict[str, Any]]:
     """
     Returns active performance profiles across models, including
     category benchmark scores, latency, reliability, and pricing.
@@ -63,9 +65,7 @@ async def get_performance_profiles(
 
 
 @router.get("/benchmark-items", summary="List curated benchmark dataset items")
-async def list_benchmark_items(
-    current_user: User = Depends(get_current_user),
-) -> List[Dict[str, Any]]:
+async def list_benchmark_items() -> List[Dict[str, Any]]:
     """
     Returns the benchmark dataset used for empirical calibration.
     """
@@ -85,11 +85,11 @@ async def list_benchmark_items(
 @router.post("/run", summary="Trigger benchmark evaluation suite")
 async def run_benchmark_evaluation(
     request: EvaluationRunRequest,
-    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> Dict[str, Any]:
     """
     Executes benchmark evaluation on the specified model, evaluates deterministic criteria,
-    and updates the active routing performance profile in real time.
+    updates the active routing performance profile in real time, and persists the run to the database.
     """
     model_id = request.model_id or "gpt-4o-mini"
     try:
@@ -98,8 +98,32 @@ async def run_benchmark_evaluation(
             provider_name=request.provider,
             max_items=request.max_items,
         )
+
+        # Persist to database if table exists
+        rec_id = None
+        try:
+            record = EvaluationRecord(
+                model_id=result.model_id,
+                provider_name=result.provider,
+                total_prompts=result.total_prompts,
+                passed_prompts=result.passed_prompts,
+                overall_quality_score=result.overall_quality_score,
+                category_scores=result.category_scores,
+                avg_latency_ms=result.avg_latency_ms,
+                total_tokens_used=result.total_tokens_used,
+                duration_seconds=result.duration_seconds,
+                item_details=result.item_details,
+            )
+            db.add(record)
+            await db.commit()
+            await db.refresh(record)
+            rec_id = str(record.id)
+        except Exception as db_err:
+            logger.warning("Could not persist evaluation record to DB", error=str(db_err))
+
         return {
             "status": "success",
+            "run_id": rec_id,
             "model_id": result.model_id,
             "provider": result.provider,
             "total_prompts": result.total_prompts,
@@ -116,10 +140,76 @@ async def run_benchmark_evaluation(
         raise HTTPException(status_code=500, detail=f"Evaluation failed: {str(exc)}")
 
 
+@router.get("/runs", summary="List historical benchmark evaluation runs")
+async def list_evaluation_runs(
+    limit: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+) -> List[Dict[str, Any]]:
+    """
+    Returns historical benchmark execution runs from the database.
+    """
+    try:
+        stmt = select(EvaluationRecord).order_by(EvaluationRecord.created_at.desc()).limit(limit)
+        res = await db.execute(stmt)
+        records = res.scalars().all()
+        if records:
+            return [
+                {
+                    "id": str(r.id),
+                    "model_id": r.model_id,
+                    "provider_name": r.provider_name,
+                    "total_prompts": r.total_prompts,
+                    "passed_prompts": r.passed_prompts,
+                    "overall_quality_score": r.overall_quality_score,
+                    "category_scores": r.category_scores or {},
+                    "avg_latency_ms": r.avg_latency_ms,
+                    "total_tokens_used": r.total_tokens_used,
+                    "duration_seconds": r.duration_seconds,
+                    "created_at": r.created_at.isoformat() if r.created_at else None,
+                }
+                for r in records
+            ]
+    except Exception:
+        pass
+    return []
+
+
+@router.get("/runs/{run_id}", summary="Get detailed evaluation run inspection")
+async def get_evaluation_run(
+    run_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Returns itemized prompt evaluation details for an evaluation run.
+    """
+    try:
+        u_id = uuid.UUID(run_id)
+        stmt = select(EvaluationRecord).where(EvaluationRecord.id == u_id)
+        res = await db.execute(stmt)
+        record = res.scalar_one_or_none()
+        if record:
+            return {
+                "id": str(record.id),
+                "model_id": record.model_id,
+                "provider_name": record.provider_name,
+                "total_prompts": record.total_prompts,
+                "passed_prompts": record.passed_prompts,
+                "overall_quality_score": record.overall_quality_score,
+                "category_scores": record.category_scores or {},
+                "avg_latency_ms": record.avg_latency_ms,
+                "total_tokens_used": record.total_tokens_used,
+                "duration_seconds": record.duration_seconds,
+                "item_details": record.item_details or [],
+                "created_at": record.created_at.isoformat() if record.created_at else None,
+            }
+    except Exception:
+        pass
+    raise HTTPException(status_code=404, detail="Evaluation run not found")
+
+
 @router.post("/classify", summary="Test prompt classification and complexity scoring")
 async def classify_prompt(
     request: ClassifyRequest,
-    current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
     Simulates the Task Classifier and Complexity Estimator for any prompt.
@@ -129,6 +219,8 @@ async def classify_prompt(
         "category": res.category.value,
         "complexity": res.complexity.value,
         "signals": res.signals,
+        "confidence": res.confidence,
         "prompt_length": len(request.prompt),
     }
+
 

@@ -50,6 +50,16 @@ async def lifespan(app: FastAPI):
     )
     from app.providers.registry import provider_registry
     provider_registry.ensure_initialized()
+
+    # Ensure database tables exist
+    try:
+        from app.database.base import Base
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("Database tables verified/created successfully")
+    except Exception as db_init_err:
+        logger.warning("Database table initialization notice", error=str(db_init_err))
+
     logger.info("IntelliGate starting", version=settings.APP_VERSION)
 
     yield

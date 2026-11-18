@@ -165,14 +165,36 @@ export async function runEvaluationSuite(modelId, provider, maxItems = 12) {
   return await res.json();
 }
 
-export async function executePlaygroundChat({ prompt, routingMode, model, temperature = 0.7, maxTokens = 800 }) {
+export async function executePlaygroundChat({
+  systemPrompt = '',
+  prompt,
+  routingMode,
+  model,
+  temperature = 0.7,
+  maxTokens = 800,
+  overrideCategory = null,
+  overrideComplexity = null,
+}) {
+  const messages = [];
+  if (systemPrompt && systemPrompt.trim()) {
+    messages.push({ role: 'system', content: systemPrompt.trim() });
+  }
+  messages.push({ role: 'user', content: prompt });
+
   const payload = {
     model: model || 'intelligent',
-    messages: [{ role: 'user', content: prompt }],
+    messages,
     temperature: parseFloat(temperature),
     max_tokens: parseInt(maxTokens, 10),
     x_routing_policy: routingMode || 'intelligent',
   };
+
+  if (overrideCategory && overrideCategory !== 'auto') {
+    payload['x_override_category'] = overrideCategory;
+  }
+  if (overrideComplexity && overrideComplexity !== 'auto') {
+    payload['x_override_complexity'] = overrideComplexity;
+  }
 
   const res = await fetch(`${GATEWAY_BASE}/chat/completions`, {
     method: 'POST',
@@ -205,9 +227,33 @@ export async function executePlaygroundChat({ prompt, routingMode, model, temper
   };
 }
 
-export async function fetchRequestLogs(limit = 20) {
+export async function fetchEvaluationRuns(limit = 20) {
   try {
-    const res = await fetch(`${API_BASE}/logs?limit=${limit}`);
+    const res = await fetch(`${API_BASE}/evaluation/runs?limit=${limit}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    return [];
+  }
+}
+
+export async function fetchEvaluationRunDetails(runId) {
+  try {
+    const res = await fetch(`${API_BASE}/evaluation/runs/${runId}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    return null;
+  }
+}
+
+export async function fetchRequestLogs({ limit = 50, status = '', model = '', cacheHit = null } = {}) {
+  try {
+    let url = `${API_BASE}/logs?limit=${limit}`;
+    if (status) url += `&status=${encodeURIComponent(status)}`;
+    if (model) url += `&model=${encodeURIComponent(model)}`;
+    if (cacheHit !== null && cacheHit !== undefined) url += `&cache_hit=${cacheHit}`;
+    const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   } catch (err) {

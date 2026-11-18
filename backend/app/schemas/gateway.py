@@ -50,6 +50,8 @@ class ChatCompletionRequest(BaseModel):
     x_routing_policy: str | None = Field(None, alias="x-routing-policy")
     x_cache_ttl: int | None = Field(None, alias="x-cache-ttl")
     x_fallback_model: str | None = Field(None, alias="x-fallback-model")
+    x_override_category: str | None = Field(None, alias="x-override-category")
+    x_override_complexity: str | None = Field(None, alias="x-override-complexity")
 
 
 # ---------------------------------------------------------------------------

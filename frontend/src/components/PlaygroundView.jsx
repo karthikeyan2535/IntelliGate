@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Terminal, Play, Copy, Check, AlertCircle, CheckCircle2,
-  Cpu, ArrowRight, CornerDownLeft, Info
+  Cpu, ArrowRight, CornerDownLeft, Info, RotateCcw, ChevronDown, ChevronRight, Sliders, ShieldAlert
 } from 'lucide-react';
 import { executePlaygroundChat } from '../services/api';
 
@@ -29,9 +29,13 @@ const PRESET_VECTORS = [
 ];
 
 export default function PlaygroundView() {
+  const [systemPrompt, setSystemPrompt] = useState('You are an expert AI assistant that follows technical instructions with high precision.');
+  const [showSystemPrompt, setShowSystemPrompt] = useState(false);
   const [prompt, setPrompt] = useState(PRESET_VECTORS[0].prompt);
   const [routingMode, setRoutingMode] = useState('intelligent');
   const [selectedModel, setSelectedModel] = useState('auto');
+  const [overrideCategory, setOverrideCategory] = useState('auto');
+  const [overrideComplexity, setOverrideComplexity] = useState('auto');
   const [temperature, setTemperature] = useState(0.7);
   const [maxTokens, setMaxTokens] = useState(600);
 
@@ -49,11 +53,14 @@ export default function PlaygroundView() {
     const startTime = performance.now();
     try {
       const data = await executePlaygroundChat({
+        systemPrompt: showSystemPrompt ? systemPrompt : '',
         prompt,
         routingMode,
         model: routingMode === 'direct' ? selectedModel : 'auto',
         temperature,
         maxTokens,
+        overrideCategory,
+        overrideComplexity,
       });
       const clientLat = Math.round(performance.now() - startTime);
       setResponse({
@@ -66,6 +73,15 @@ export default function PlaygroundView() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleReset() {
+    setPrompt('');
+    setSystemPrompt('You are an expert AI assistant that follows technical instructions with high precision.');
+    setResponse(null);
+    setError(null);
+    setOverrideCategory('auto');
+    setOverrideComplexity('auto');
   }
 
   function handleKeyDown(e) {
@@ -87,115 +103,195 @@ export default function PlaygroundView() {
 
   return (
     <div className="space-y-4">
-      {/* Configuration & Preset Ribbon */}
-      <div className="bg-app-panel border border-app-border rounded-lg p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
-        {/* Strategy Selector */}
-        <div className="flex items-center gap-1.5 bg-app-bg p-1 rounded border border-app-border">
-          <button
-            onClick={() => { setRoutingMode('intelligent'); setSelectedModel('auto'); }}
-            className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors cursor-pointer ${
-              routingMode === 'intelligent'
-                ? 'bg-metric-blue text-white'
-                : 'text-ink-muted hover:text-ink-secondary'
-            }`}
-          >
-            INTELLIGENT ROUTER
-          </button>
-          <button
-            onClick={() => { setRoutingMode('lowest_cost'); setSelectedModel('auto'); }}
-            className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors cursor-pointer ${
-              routingMode === 'lowest_cost'
-                ? 'bg-metric-emerald text-white'
-                : 'text-ink-muted hover:text-ink-secondary'
-            }`}
-          >
-            LOWEST COST
-          </button>
-          <button
-            onClick={() => { setRoutingMode('direct'); setSelectedModel('gpt-4o'); }}
-            className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors cursor-pointer ${
-              routingMode === 'direct'
-                ? 'bg-ink-faint text-ink-primary'
-                : 'text-ink-muted hover:text-ink-secondary'
-            }`}
-          >
-            DIRECT PINNED
-          </button>
+      {/* Primary Configuration Toolbar */}
+      <div className="bg-app-panel border border-app-border rounded-lg p-3.5 space-y-3 font-mono text-xs">
+        {/* Top Controls Row */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {/* Strategy Mode Selector */}
+          <div className="flex items-center gap-1.5 bg-app-bg p-1 rounded border border-app-border">
+            <button
+              onClick={() => { setRoutingMode('intelligent'); setSelectedModel('auto'); }}
+              className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors cursor-pointer ${
+                routingMode === 'intelligent'
+                  ? 'bg-metric-blue text-white'
+                  : 'text-ink-muted hover:text-ink-secondary'
+              }`}
+            >
+              INTELLIGENT ROUTER
+            </button>
+            <button
+              onClick={() => { setRoutingMode('lowest_cost'); setSelectedModel('auto'); }}
+              className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors cursor-pointer ${
+                routingMode === 'lowest_cost'
+                  ? 'bg-metric-emerald text-white'
+                  : 'text-ink-muted hover:text-ink-secondary'
+              }`}
+            >
+              LOWEST COST
+            </button>
+            <button
+              onClick={() => { setRoutingMode('direct'); setSelectedModel('gpt-4o'); }}
+              className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors cursor-pointer ${
+                routingMode === 'direct'
+                  ? 'bg-app-subtle text-ink-primary border border-app-border'
+                  : 'text-ink-muted hover:text-ink-secondary'
+              }`}
+            >
+              DIRECT PINNED
+            </button>
+          </div>
+
+          {/* Model Dropdown (when direct) */}
+          {routingMode === 'direct' && (
+            <div className="flex items-center gap-2">
+              <span className="text-ink-muted text-[11px]">TARGET:</span>
+              <select
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+                className="bg-app-bg border border-app-border text-ink-primary rounded px-2.5 py-1 text-xs focus:outline-none focus:border-metric-blue font-mono"
+              >
+                <option value="gpt-4o">openai / gpt-4o (Frontier)</option>
+                <option value="llama-3.3-70b-versatile">groq / llama-3.3-70b (LPU Fast)</option>
+                <option value="gpt-4o-mini">openai / gpt-4o-mini</option>
+                <option value="gemini-1.5-flash">gemini / gemini-1.5-flash</option>
+                <option value="llama-3.1-8b-instant">groq / llama-3.1-8b (Ultra-fast)</option>
+                <option value="gemini-1.5-pro">gemini / gemini-1.5-pro</option>
+              </select>
+            </div>
+          )}
+
+          {/* Sliders */}
+          <div className="flex items-center gap-4 text-[11px]">
+            <div className="flex items-center gap-2">
+              <span className="text-ink-muted">TEMP:</span>
+              <input
+                type="range"
+                min="0.0"
+                max="1.0"
+                step="0.1"
+                value={temperature}
+                onChange={(e) => setTemperature(parseFloat(e.target.value))}
+                className="w-16 accent-metric-blue cursor-pointer"
+              />
+              <span className="text-ink-primary w-6 text-right font-bold">{temperature}</span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-ink-muted">MAX_TOKENS:</span>
+              <input
+                type="number"
+                min="50"
+                max="2000"
+                step="50"
+                value={maxTokens}
+                onChange={(e) => setMaxTokens(parseInt(e.target.value, 10))}
+                className="w-16 bg-app-bg border border-app-border text-ink-primary rounded px-2 py-0.5 text-xs text-right focus:outline-none font-bold"
+              />
+            </div>
+          </div>
+
+          {/* Preset Vectors */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] text-ink-muted uppercase mr-1">Presets:</span>
+            {PRESET_VECTORS.map((v, idx) => (
+              <button
+                key={idx}
+                onClick={() => setPrompt(v.prompt)}
+                className="px-2 py-0.5 bg-app-subtle hover:bg-app-hover border border-app-border text-[10px] rounded text-ink-secondary hover:text-ink-primary transition-colors cursor-pointer"
+                title={v.prompt}
+              >
+                {v.tag}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Model Dropdown (when direct) */}
-        {routingMode === 'direct' && (
+        {/* Secondary Row: Manual Category & Complexity Overrides */}
+        <div className="pt-2 border-t border-app-border/60 flex flex-wrap items-center justify-between gap-3 text-[11px]">
+          <div className="flex items-center gap-4">
+            {/* Category Override */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-ink-muted">CATEGORY OVERRIDE:</span>
+              <select
+                value={overrideCategory}
+                onChange={(e) => setOverrideCategory(e.target.value)}
+                className={`bg-app-bg border text-xs rounded px-2 py-0.5 focus:outline-none ${
+                  overrideCategory !== 'auto'
+                    ? 'border-metric-cyan text-metric-cyan font-bold'
+                    : 'border-app-border text-ink-secondary'
+                }`}
+              >
+                <option value="auto">Auto-Detect (Heuristic)</option>
+                <option value="coding">Coding</option>
+                <option value="reasoning">Reasoning</option>
+                <option value="writing">Writing</option>
+                <option value="general_qa">General Q&A</option>
+              </select>
+            </div>
+
+            {/* Complexity Override */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-ink-muted">COMPLEXITY OVERRIDE:</span>
+              <select
+                value={overrideComplexity}
+                onChange={(e) => setOverrideComplexity(e.target.value)}
+                className={`bg-app-bg border text-xs rounded px-2 py-0.5 focus:outline-none ${
+                  overrideComplexity !== 'auto'
+                    ? 'border-metric-amber text-metric-amber font-bold'
+                    : 'border-app-border text-ink-secondary'
+                }`}
+              >
+                <option value="auto">Auto-Estimate (Depth & Constraints)</option>
+                <option value="simple">Simple</option>
+                <option value="moderate">Moderate</option>
+                <option value="complex">Complex</option>
+              </select>
+            </div>
+          </div>
+
+          {/* System Prompt Toggle & Reset */}
           <div className="flex items-center gap-2">
-            <span className="text-ink-muted text-[11px]">TARGET:</span>
-            <select
-              value={selectedModel}
-              onChange={(e) => setSelectedModel(e.target.value)}
-              className="bg-app-bg border border-app-border text-ink-primary rounded px-2.5 py-1 text-xs focus:outline-none focus:border-metric-blue font-mono"
+            <button
+              onClick={() => setShowSystemPrompt(!showSystemPrompt)}
+              className="text-ink-secondary hover:text-ink-primary flex items-center gap-1 text-[11px] cursor-pointer"
             >
-              <option value="gpt-4o">openai / gpt-4o (Frontier)</option>
-              <option value="llama-3.3-70b-versatile">groq / llama-3.3-70b (LPU Fast)</option>
-              <option value="gpt-4o-mini">openai / gpt-4o-mini</option>
-              <option value="gemini-1.5-flash">gemini / gemini-1.5-flash</option>
-              <option value="llama-3.1-8b-instant">groq / llama-3.1-8b (Ultra-fast)</option>
-              <option value="gemini-1.5-pro">gemini / gemini-1.5-pro</option>
-            </select>
+              {showSystemPrompt ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+              <span>System Prompt</span>
+            </button>
+            <button
+              onClick={handleReset}
+              className="px-2 py-0.5 bg-app-subtle hover:bg-app-hover border border-app-border text-ink-muted hover:text-ink-primary rounded flex items-center gap-1 text-[10px] cursor-pointer"
+              title="Reset prompt and parameters"
+            >
+              <RotateCcw className="w-2.5 h-2.5" />
+              <span>Reset</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Expandable System Prompt Field */}
+        {showSystemPrompt && (
+          <div className="pt-2 border-t border-app-border/40">
+            <div className="text-[10px] text-ink-muted uppercase mb-1">System Instructions (Role: system)</div>
+            <textarea
+              rows={2}
+              value={systemPrompt}
+              onChange={(e) => setSystemPrompt(e.target.value)}
+              placeholder="System prompt context (e.g. persona, formatting guidelines)..."
+              className="w-full bg-app-bg border border-app-border rounded p-2 text-xs text-ink-primary font-mono focus:outline-none focus:border-metric-blue resize-none"
+            />
           </div>
         )}
-
-        {/* Sliders */}
-        <div className="flex items-center gap-4 text-[11px]">
-          <div className="flex items-center gap-2">
-            <span className="text-ink-muted">TEMP:</span>
-            <input
-              type="range"
-              min="0.0"
-              max="1.0"
-              step="0.1"
-              value={temperature}
-              onChange={(e) => setTemperature(parseFloat(e.target.value))}
-              className="w-16 accent-metric-blue"
-            />
-            <span className="text-ink-primary w-6 text-right">{temperature}</span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-ink-muted">MAX_TOKENS:</span>
-            <input
-              type="number"
-              min="50"
-              max="2000"
-              step="50"
-              value={maxTokens}
-              onChange={(e) => setMaxTokens(parseInt(e.target.value, 10))}
-              className="w-16 bg-app-bg border border-app-border text-ink-primary rounded px-2 py-0.5 text-xs text-right focus:outline-none"
-            />
-          </div>
-        </div>
-
-        {/* Preset Vectors */}
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-ink-muted uppercase mr-1">Vectors:</span>
-          {PRESET_VECTORS.map((v, idx) => (
-            <button
-              key={idx}
-              onClick={() => setPrompt(v.prompt)}
-              className="px-2 py-0.5 bg-app-subtle hover:bg-app-hover border border-app-border text-[10px] rounded text-ink-secondary hover:text-ink-primary transition-colors cursor-pointer"
-              title={v.prompt}
-            >
-              {v.tag}
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* Main Split Workbench */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Left: Prompt Input Terminal */}
+        {/* Left: Prompt Input Buffer */}
         <div className="bg-app-panel border border-app-border rounded-lg flex flex-col justify-between">
           <div className="p-4">
             <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-app-border text-xs font-mono">
               <span className="text-ink-muted uppercase tracking-wider text-[11px] font-semibold">
-                Request Prompt Buffer
+                User Prompt Buffer (Role: user)
               </span>
               <span className="text-ink-faint text-[11px]">
                 {prompt.length} chars • ~{Math.ceil(prompt.length / 4)} tokens
@@ -218,7 +314,7 @@ export default function PlaygroundView() {
               <kbd className="px-1.5 py-0.5 bg-app-bg border border-app-border rounded text-[10px] text-ink-secondary">
                 Ctrl+Enter
               </kbd>
-              <span>to send</span>
+              <span>to execute</span>
             </span>
 
             <button
@@ -256,25 +352,25 @@ export default function PlaygroundView() {
           {response && (
             <div className="grid grid-cols-5 gap-px bg-app-border border border-app-border rounded-lg overflow-hidden font-mono text-center">
               <div className="bg-app-panel p-2">
-                <div className="text-[10px] text-ink-muted">RESOLVED MODEL</div>
+                <div className="text-[10px] text-ink-muted uppercase">Resolved Model</div>
                 <div className="text-xs font-bold text-ink-primary truncate mt-0.5">
                   {response.model || 'auto'}
                 </div>
               </div>
               <div className="bg-app-panel p-2">
-                <div className="text-[10px] text-ink-muted">ROUNDTRIP</div>
+                <div className="text-[10px] text-ink-muted uppercase">Roundtrip</div>
                 <div className="text-xs font-bold text-metric-amber mt-0.5">
                   {response.client_latency_ms || 240} ms
                 </div>
               </div>
               <div className="bg-app-panel p-2">
-                <div className="text-[10px] text-ink-muted">TOKENS</div>
+                <div className="text-[10px] text-ink-muted uppercase">Tokens</div>
                 <div className="text-xs font-bold text-metric-cyan mt-0.5">
                   {response.usage?.total_tokens || 0}
                 </div>
               </div>
               <div className="bg-app-panel p-2">
-                <div className="text-[10px] text-ink-muted">EXACT CACHE</div>
+                <div className="text-[10px] text-ink-muted uppercase">Cache</div>
                 <div className={`text-xs font-bold mt-0.5 ${
                   response.cache_status === 'HIT' ? 'text-metric-emerald' : 'text-ink-secondary'
                 }`}>
@@ -282,7 +378,7 @@ export default function PlaygroundView() {
                 </div>
               </div>
               <div className="bg-app-panel p-2">
-                <div className="text-[10px] text-ink-muted">COST USD</div>
+                <div className="text-[10px] text-ink-muted uppercase">Cost USD</div>
                 <div className="text-xs font-bold text-metric-emerald mt-0.5">
                   {response.cost_usd != null ? `$${Number(response.cost_usd).toFixed(6)}` : '—'}
                 </div>
@@ -322,7 +418,7 @@ export default function PlaygroundView() {
               {loading ? (
                 <div className="flex items-center justify-center h-28 text-ink-muted gap-2">
                   <Terminal className="w-4 h-4 animate-spin text-metric-blue" />
-                  <span>Computing Pareto weights across candidate models...</span>
+                  <span>Evaluating Pareto utility across candidate models...</span>
                 </div>
               ) : response?.choices?.[0]?.message?.content ? (
                 response.choices[0].message.content
@@ -337,14 +433,19 @@ export default function PlaygroundView() {
           {/* Transparent Routing Decision Matrix */}
           {decision && (
             <div className="bg-app-panel border border-app-border rounded-lg p-4 font-mono text-xs space-y-3">
-              <div className="flex items-center justify-between pb-2 border-b border-app-border">
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-app-border">
                 <div className="flex items-center gap-2">
                   <span className="text-ink-primary font-bold uppercase tracking-wider text-[11px]">
                     ROUTING DECISION TELEMETRY
                   </span>
-                  <span className="px-1.5 py-0.5 bg-app-subtle border border-app-border rounded text-[10px] text-metric-blue uppercase">
+                  <span className="px-1.5 py-0.5 bg-app-subtle border border-app-border rounded text-[10px] text-metric-blue uppercase font-bold">
                     {decision.mode}
                   </span>
+                  {decision.is_overridden && (
+                    <span className="px-1.5 py-0.5 bg-metric-amber/15 border border-metric-amber/30 rounded text-[10px] text-metric-amber uppercase font-bold">
+                      MANUAL OVERRIDE
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="px-1.5 py-0.5 rounded bg-app-subtle border border-app-border text-[10px] text-metric-cyan uppercase">
@@ -361,11 +462,23 @@ export default function PlaygroundView() {
                 {decision.reason}
               </div>
 
+              {/* Applied Weights Strip */}
+              {decision.applied_weights && Object.keys(decision.applied_weights).length > 0 && (
+                <div className="flex items-center gap-3 text-[10px] text-ink-muted bg-app-subtle/50 px-2.5 py-1.5 rounded border border-app-border/40">
+                  <span className="font-semibold text-ink-secondary uppercase">Applied Weights:</span>
+                  {Object.entries(decision.applied_weights).map(([k, w]) => (
+                    <span key={k} className="font-mono">
+                      {k}: <strong className="text-ink-primary">{(w * 100).toFixed(0)}%</strong>
+                    </span>
+                  ))}
+                </div>
+              )}
+
               {/* Candidate Utility Score Table */}
               {decision.candidate_scores?.length > 0 && (
                 <div className="space-y-1.5 pt-1">
                   <div className="text-[10px] font-semibold text-ink-muted uppercase tracking-wider">
-                    Candidate Evaluation Ranking & Multi-Objective Scores
+                    Eligible Candidate Ranking (Linear Multi-Objective Utility)
                   </div>
 
                   <div className="overflow-x-auto">
@@ -373,16 +486,16 @@ export default function PlaygroundView() {
                       <thead className="text-[10px] text-ink-muted border-b border-app-border">
                         <tr>
                           <th className="pb-1.5">Rank</th>
-                          <th className="pb-1.5">Candidate Model</th>
+                          <th className="pb-1.5">Model</th>
                           <th className="pb-1.5 text-center">Quality (Q)</th>
                           <th className="pb-1.5 text-center">Cost Score</th>
                           <th className="pb-1.5 text-center">Latency</th>
                           <th className="pb-1.5 text-center">$/1K</th>
-                          <th className="pb-1.5 text-right font-bold">Composite Utility</th>
+                          <th className="pb-1.5 text-right font-bold">Utility Score</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-app-border/40">
-                        {decision.candidate_scores.slice(0, 4).map((c, idx) => (
+                        {decision.candidate_scores.map((c, idx) => (
                           <tr
                             key={idx}
                             className={idx === 0 ? 'text-ink-primary font-semibold' : 'text-ink-muted'}
@@ -416,6 +529,24 @@ export default function PlaygroundView() {
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Rejected Candidates & Reasons */}
+              {decision.rejected_candidates?.length > 0 && (
+                <div className="space-y-1.5 pt-2 border-t border-app-border/40">
+                  <div className="text-[10px] font-semibold text-ink-muted uppercase tracking-wider flex items-center gap-1.5">
+                    <ShieldAlert className="w-3 h-3 text-metric-amber" />
+                    <span>Candidate Filter & Rejection Log</span>
+                  </div>
+                  <div className="space-y-1">
+                    {decision.rejected_candidates.slice(0, 5).map((r, idx) => (
+                      <div key={idx} className="flex items-start justify-between text-[10px] bg-app-subtle/30 px-2 py-1 rounded border border-app-border/40">
+                        <span className="font-semibold text-ink-secondary">{r.model_id} <span className="text-ink-faint">({r.provider})</span>:</span>
+                        <span className="text-ink-muted text-right max-w-[70%]">{r.reason}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}

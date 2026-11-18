@@ -33,6 +33,9 @@ class ClassificationResult:
     confidence: float
     detected_features: list[str]
     explanation: str
+    is_overridden: bool = False
+    original_category: str | None = None
+    original_complexity: str | None = None
 
     @property
     def signals(self) -> list[str]:
@@ -84,14 +87,29 @@ class TaskClassifier:
     """Classifies user prompts into task categories and complexity levels."""
 
     @classmethod
-    def classify(cls, prompt: str) -> ClassificationResult:
+    def classify(
+        cls,
+        prompt: str,
+        override_category: str | None = None,
+        override_complexity: str | None = None,
+    ) -> ClassificationResult:
         if not prompt or not prompt.strip():
+            cat = TaskCategory.GENERAL_QA
+            comp = ComplexityLevel.SIMPLE
+            is_ov = False
+            if override_category and override_category.lower() in [c.value for c in TaskCategory]:
+                cat = TaskCategory(override_category.lower())
+                is_ov = True
+            if override_complexity and override_complexity.lower() in [c.value for c in ComplexityLevel]:
+                comp = ComplexityLevel(override_complexity.lower())
+                is_ov = True
             return ClassificationResult(
-                category=TaskCategory.GENERAL_QA,
-                complexity=ComplexityLevel.SIMPLE,
-                confidence=0.5,
-                detected_features=["empty_or_minimal_prompt"],
-                explanation="Minimal or empty prompt defaulted to general_qa.",
+                category=cat,
+                complexity=comp,
+                confidence=1.0 if is_ov else 0.5,
+                detected_features=["manual_override"] if is_ov else ["empty_or_minimal_prompt"],
+                explanation="Manual parameter override applied." if is_ov else "Minimal or empty prompt defaulted to general_qa.",
+                is_overridden=is_ov,
             )
 
         text = prompt.strip()
@@ -189,15 +207,39 @@ class TaskClassifier:
         else:
             complexity = ComplexityLevel.SIMPLE
 
-        explanation = (
-            f"Classified as '{category.value}' ({complexity.value} complexity) "
-            f"based on {', '.join(features) if features else 'direct informational phrasing'}."
-        )
+        # Apply user overrides if specified
+        is_overridden = False
+        orig_cat = category.value
+        orig_comp = complexity.value
+
+        if override_category and override_category.lower() in [c.value for c in TaskCategory]:
+            category = TaskCategory(override_category.lower())
+            is_overridden = True
+            features.append(f"override_category:{category.value}")
+
+        if override_complexity and override_complexity.lower() in [c.value for c in ComplexityLevel]:
+            complexity = ComplexityLevel(override_complexity.lower())
+            is_overridden = True
+            features.append(f"override_complexity:{complexity.value}")
+
+        if is_overridden:
+            explanation = (
+                f"Manual override applied: '{category.value}' ({complexity.value} complexity). "
+                f"Auto-detected was '{orig_cat}' ({orig_comp})."
+            )
+        else:
+            explanation = (
+                f"Classified as '{category.value}' ({complexity.value} complexity) "
+                f"based on {', '.join(features) if features else 'direct informational phrasing'}."
+            )
 
         return ClassificationResult(
             category=category,
             complexity=complexity,
-            confidence=round(confidence, 2),
+            confidence=1.0 if is_overridden else round(confidence, 2),
             detected_features=features,
             explanation=explanation,
+            is_overridden=is_overridden,
+            original_category=orig_cat if is_overridden else None,
+            original_complexity=orig_comp if is_overridden else None,
         )

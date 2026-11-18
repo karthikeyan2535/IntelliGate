@@ -53,6 +53,10 @@ class RoutingDecision:
     fallback_candidates: list[tuple[str, str]]  # list of (provider, model)
     reason: str
     candidate_scores: list[CandidateScore] = field(default_factory=list)
+    rejected_candidates: list[dict[str, str]] = field(default_factory=list)
+    applied_weights: dict[str, float] = field(default_factory=dict)
+    confidence: float = 1.0
+    is_overridden: bool = False
 
 
 class RoutingEngine:
@@ -68,11 +72,13 @@ class RoutingEngine:
         requested_model: Optional[str] = None,
         routing_mode: str = "intelligent",
         max_tokens_needed: Optional[int] = None,
+        override_category: Optional[str] = None,
+        override_complexity: Optional[str] = None,
     ) -> RoutingDecision:
         """
         Executes routing decision:
-        1. Classifies task category & complexity.
-        2. Filters eligible models.
+        1. Classifies task category & complexity (or applies user overrides).
+        2. Filters eligible models and tracks rejections.
         3. Ranks candidates via multi-objective utility scoring.
         4. Selects optimal model and builds fallback chain.
         """
@@ -86,23 +92,35 @@ class RoutingEngine:
         ):
             return self._handle_direct_routing(requested_model or "gpt-4o")
 
-        # 2. Task Classification & Complexity Estimation
-        classification = TaskClassifier.classify(prompt)
-        category_str = classification.category.value
-        complexity_str = classification.complexity.value
+        # 2. Task Classification & Complexity Estimation (with manual override support)
+        classification = TaskClassifier.classify(
+            prompt,
+            override_category=override_category,
+            override_complexity=override_complexity,
+        )
 
-        # 3. Filter Eligible Models
+        # 3. Filter Eligible Models & Track Rejections
         all_profiles = ProfileManager.get_all()
         eligible: list[ModelPerformanceProfile] = []
+        rejected: list[dict[str, str]] = []
 
         for p in all_profiles:
             # Check context window
             if max_tokens_needed and p.context_window < max_tokens_needed:
+                rejected.append({
+                    "model_id": p.model_id,
+                    "provider": p.provider,
+                    "reason": f"Insufficient context window ({p.context_window} < {max_tokens_needed} requested)",
+                })
                 continue
             # Check circuit breaker
             cb_state = await self.circuit_breaker.get_state(p.provider)
             if cb_state == CircuitState.OPEN:
-                logger.warning("Omitting candidate due to OPEN circuit breaker", provider=p.provider)
+                rejected.append({
+                    "model_id": p.model_id,
+                    "provider": p.provider,
+                    "reason": f"Circuit breaker OPEN for provider '{p.provider}' due to upstream failures",
+                })
                 continue
             eligible.append(p)
 
@@ -111,10 +129,10 @@ class RoutingEngine:
 
         # 4. Routing Mode Selection: Lowest-Cost Mode
         if routing_mode == "lowest_cost" or clean_model == "fast-model":
-            return self._handle_lowest_cost_routing(eligible, classification)
+            return self._handle_lowest_cost_routing(eligible, classification, rejected=rejected)
 
         # 5. Intelligent Routing Mode (Evaluation-Driven Multi-Objective Optimization)
-        return self._handle_intelligent_routing(eligible, classification)
+        return self._handle_intelligent_routing(eligible, classification, rejected=rejected)
 
     async def select_route_candidates(
         self,
@@ -160,6 +178,7 @@ class RoutingEngine:
         self,
         profiles: list[ModelPerformanceProfile],
         classification: ClassificationResult,
+        rejected: Optional[list[dict[str, str]]] = None,
     ) -> RoutingDecision:
         # Sort by total blended token cost (input + output)
         sorted_by_cost = sorted(
@@ -168,6 +187,14 @@ class RoutingEngine:
         )
         winner = sorted_by_cost[0]
         fallbacks = [(p.provider, p.model_id) for p in sorted_by_cost[1:3]]
+
+        rejected_candidates = list(rejected or [])
+        for p in sorted_by_cost[1:]:
+            rejected_candidates.append({
+                "model_id": p.model_id,
+                "provider": p.provider,
+                "reason": f"Higher token cost (${float(p.input_cost_per_1k):.6f}/1K vs ${float(winner.input_cost_per_1k):.6f}/1K)",
+            })
 
         reason = (
             f"Lowest-cost mode selected {winner.display_name} "
@@ -200,47 +227,64 @@ class RoutingEngine:
             fallback_candidates=fallbacks,
             reason=reason,
             candidate_scores=scores,
+            rejected_candidates=rejected_candidates,
+            applied_weights={"cost": 1.0},
+            confidence=classification.confidence,
+            is_overridden=classification.is_overridden,
         )
 
     def _handle_intelligent_routing(
         self,
         profiles: list[ModelPerformanceProfile],
         classification: ClassificationResult,
+        rejected: Optional[list[dict[str, str]]] = None,
     ) -> RoutingDecision:
         category = classification.category.value
         complexity = classification.complexity
 
         # 1. Quality-Tier Gating: Strictly filter candidate pool based on task complexity
         if complexity == ComplexityLevel.COMPLEX:
-            # Complex tasks (e.g. distributed systems, formal proofs, complex architectures):
-            # Frontier models required: minimum quality 0.88
             min_quality_threshold = 0.88
             w_quality = 0.70
             w_cost = 0.15
             w_latency = 0.10
             w_reliability = 0.05
         elif complexity == ComplexityLevel.MODERATE:
-            # Moderate tasks (e.g. full functions, refactors, detailed analyses):
-            # Mid-to-high models required: minimum quality 0.80
             min_quality_threshold = 0.80
             w_quality = 0.55
             w_cost = 0.25
             w_latency = 0.15
             w_reliability = 0.05
         else:
-            # Simple tasks (e.g. quick Q&A, greetings, single conversions):
-            # All models eligible, cost & latency prioritized
+            # Simple tasks: Cost & speed prioritized
             min_quality_threshold = 0.70
             w_quality = 0.35
             w_cost = 0.40
             w_latency = 0.20
             w_reliability = 0.05
 
-        # Filter candidates meeting the quality gate for this category
-        gated_candidates = [
-            p for p in profiles
-            if p.get_quality_for_category(category) >= min_quality_threshold
-        ]
+        applied_weights = {
+            "quality": w_quality,
+            "cost": w_cost,
+            "latency": w_latency,
+            "reliability": w_reliability,
+        }
+
+        # Filter candidates meeting the quality gate and record rejections
+        rejected_candidates = list(rejected or [])
+        gated_candidates: list[ModelPerformanceProfile] = []
+
+        for p in profiles:
+            q = p.get_quality_for_category(category)
+            if q >= min_quality_threshold:
+                gated_candidates.append(p)
+            else:
+                rejected_candidates.append({
+                    "model_id": p.model_id,
+                    "provider": p.provider,
+                    "reason": f"Quality score ({q:.2f}) below minimum threshold ({min_quality_threshold:.2f}) for {complexity.value} tasks",
+                })
+
         # In case no candidate passes gate, fallback to top 3 by category quality
         if not gated_candidates:
             gated_candidates = sorted(
@@ -263,9 +307,7 @@ class RoutingEngine:
         scored_candidates: list[CandidateScore] = []
 
         for p in gated_candidates:
-            raw_quality = p.get_quality_for_category(category)
-            # Non-linear amplification: quality^1.8 ensures top frontier models gain substantial advantage
-            amplified_quality = raw_quality ** 1.8
+            quality = p.get_quality_for_category(category)
 
             # Log-normalized cost score (1.0 = lowest cost, 0.0 = highest cost in pool)
             p_log_cost = math.log(max(float(p.input_cost_per_1k), 1e-6))
@@ -278,9 +320,9 @@ class RoutingEngine:
             p_lat = p.avg_latency_ms
             lat_norm = (max_lat - p_lat) / (max_lat - min_lat) if max_lat > min_lat else 1.0
 
-            # Multi-objective utility function
+            # Multi-objective utility function: U(m) = wq*Q + wc*C + wl*L + wr*R
             overall = (
-                (w_quality * amplified_quality) +
+                (w_quality * quality) +
                 (w_cost * cost_norm) +
                 (w_latency * lat_norm) +
                 (w_reliability * p.reliability)
@@ -290,7 +332,7 @@ class RoutingEngine:
                 model_id=p.model_id,
                 provider=p.provider,
                 overall_score=round(overall, 4),
-                quality_score=round(raw_quality, 3),
+                quality_score=round(quality, 3),
                 cost_score=round(cost_norm, 3),
                 latency_score=round(lat_norm, 3),
                 reliability_score=p.reliability,
@@ -305,6 +347,14 @@ class RoutingEngine:
 
         winner_score = scored_candidates[0]
         winner_prof = ProfileManager.get(winner_score.model_id)
+
+        # Add runners-up to rejected candidates with transparent reason
+        for s in scored_candidates[1:]:
+            rejected_candidates.append({
+                "model_id": s.model_id,
+                "provider": s.provider,
+                "reason": f"Lower composite utility score ({s.overall_score:.4f} vs {winner_score.overall_score:.4f})",
+            })
 
         # Build fallback chain
         fallbacks = [(s.provider, s.model_id) for s in scored_candidates[1:3]]
@@ -331,6 +381,10 @@ class RoutingEngine:
             fallback_candidates=fallbacks,
             reason=reason,
             candidate_scores=scored_candidates,
+            rejected_candidates=rejected_candidates,
+            applied_weights=applied_weights,
+            confidence=classification.confidence,
+            is_overridden=classification.is_overridden,
         )
 
 

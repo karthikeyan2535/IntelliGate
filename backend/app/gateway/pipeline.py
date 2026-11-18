@@ -234,6 +234,9 @@ class GatewayPipeline:
                 prompt=prompt_text,
                 requested_model=request.model,
                 routing_mode=strategy,
+                max_tokens_needed=request.max_tokens,
+                override_category=request.x_override_category,
+                override_complexity=request.x_override_complexity,
             )
             ctx.routing_decision = decision
             candidates = [
@@ -408,6 +411,10 @@ class GatewayPipeline:
                 "selected_model": ctx.routing_decision.selected_model,
                 "selected_provider": ctx.routing_decision.selected_provider,
                 "reason": ctx.routing_decision.reason,
+                "confidence": getattr(ctx.routing_decision, "confidence", 1.0),
+                "is_overridden": getattr(ctx.routing_decision, "is_overridden", False),
+                "applied_weights": getattr(ctx.routing_decision, "applied_weights", {}),
+                "rejected_candidates": getattr(ctx.routing_decision, "rejected_candidates", []),
                 "candidate_scores": [
                     {
                         "model_id": s.model_id,

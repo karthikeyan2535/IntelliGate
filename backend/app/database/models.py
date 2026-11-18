@@ -621,3 +621,27 @@ class AuditLog(Base):
         Index("ix_audit_logs_created_at", "created_at"),
         Index("ix_audit_logs_resource_type", "resource_type"),
     )
+
+
+# ── evaluation_records ────────────────────────────────────────────────────────
+
+
+class EvaluationRecord(Base):
+    __tablename__ = "evaluation_records"
+
+    model_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    provider_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    total_prompts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    passed_prompts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    overall_quality_score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    category_scores: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    avg_latency_ms: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    total_tokens_used: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    duration_seconds: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    item_details: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+
+    __table_args__ = (
+        Index("ix_evaluation_records_model_id", "model_id"),
+        Index("ix_evaluation_records_created_at", "created_at"),
+    )
+
