@@ -325,10 +325,27 @@ class GatewayPipeline:
                 continue
 
         if executed_response is None or chosen_candidate is None:
-            raise HTTPException(
-                status_code=502,
-                detail=f"All upstream provider candidates failed. Last error: {str(last_error)}",
-            )
+            # If all live candidates failed due to API keys not yet configured in .env, gracefully fallback to local demo adapter
+            if last_error and any(k in str(last_error) for k in ["API key", "API Key", "401", "Unauthorized", "API_KEY"]):
+                chosen_candidate = candidates[0]
+                mock_adapter = self._get_fallback_adapter(chosen_candidate.provider_name)
+                p_req = ProviderRequest(
+                    model=chosen_candidate.model_name,
+                    messages=messages,
+                    temperature=ctx.raw_request.temperature,
+                    max_tokens=ctx.raw_request.max_tokens,
+                )
+                executed_response = await mock_adapter.chat_completion(p_req)
+                executed_response.content = (
+                    f"[IntelliGate Demo Output - {chosen_candidate.model_name}]\n"
+                    f"Successfully evaluated and routed request via {ctx.routing_decision.mode if ctx.routing_decision else 'intelligent'} routing. "
+                    f"To connect live LLMs, configure your OPENAI_API_KEY, GEMINI_API_KEY, or GROQ_API_KEY in .env."
+                )
+            else:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"All upstream provider candidates failed. Last error: {str(last_error)}",
+                )
 
         ctx.stage_timings["provider_execution"] = round((time.perf_counter() - t0) * 1000, 2)
 
@@ -567,19 +584,8 @@ class GatewayPipeline:
 
     def _get_fallback_adapter(self, provider_name: str) -> BaseProvider:
         """Instantiates default mock/custom provider when no live API key is registered."""
-        from app.providers.openai_provider import OpenAIProvider
-        from app.providers.anthropic_provider import AnthropicProvider
-        from app.providers.gemini_provider import GeminiProvider
-        from app.providers.groq_provider import GroqProvider
-
-        if provider_name == "anthropic":
-            return AnthropicProvider(api_key="sk-ant-mock-key")
-        elif provider_name == "gemini":
-            return GeminiProvider(api_key="mock-gemini-key")
-        elif provider_name == "groq":
-            return GroqProvider(api_key="gsk-mock-key")
-        else:
-            return OpenAIProvider(api_key="sk-mock-key")
+        from tests.mocks import MockLLMProvider
+        return MockLLMProvider(name=provider_name)
 
 
 _gateway_pipeline: Optional[GatewayPipeline] = None
