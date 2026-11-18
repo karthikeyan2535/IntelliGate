@@ -46,8 +46,10 @@ Modern enterprise applications routinely suffer from **LLM over-provisioning**: 
                                     │
                                     ▼
 ┌────────────────────────────────────────────────────────────────────────┐
-│             STAGE 5: TOKEN ACCOUNTING & METRIC LOGGING                 │
-│         Exact Decimal Cost Calculation + Latency Tracking              │
+│       STAGE 5: TOKEN ACCOUNTING, PERSISTENCE & TELEMETRY STREAM        │
+│   • Exact Decimal Financial Calculations (input/output tokens)         │
+│   • Asynchronous RequestLog DB persistence (zero-overhead)             │
+│   • Real-time Analytics & Audit Trail emission                         │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -61,7 +63,7 @@ IntelliGate is architected around a clean separation of concerns, avoiding britt
 
 | Subsystem | Primary Python Modules | Purpose & Implementation |
 | :--- | :--- | :--- |
-| **API Gateway** | `app.api.v1.gateway`, `app.schemas.gateway` | Full OpenAI-compatible `/v1/chat/completions` and `/v1/models` endpoints. Supports streaming SSE, non-streaming, custom routing headers. |
+| **API Gateway** | `app.api.v1.gateway`, `app.schemas.gateway` | Full OpenAI-compatible `/v1/chat/completions` and `/v1/models` endpoints. Supports streaming SSE, non-streaming, custom routing headers, and session-backed audit persistence. |
 | **Task Classifier** | `app.routing.classifier` | Multi-regex and structural heuristic analyzer. Detects task category (`coding`, `reasoning`, `writing`, `general_qa`) and independently calculates complexity (`simple`, `moderate`, `complex`). |
 | **Intelligent Routing Engine** | `app.routing.engine`, `app.evaluation.profiles` | Gated multi-objective optimization engine balancing empirical quality ($Q^{1.8}$), log-normalized cost, latency, and reliability. Builds fallback priority chains. |
 | **Evaluation Framework** | `app.evaluation.dataset`, `app.evaluation.evaluator` | Curated 24-prompt deterministic benchmark suite. Measures quality, token efficiency, and response latency across models. Dynamically updates profile registry. |
@@ -70,7 +72,8 @@ IntelliGate is architected around a clean separation of concerns, avoiding britt
 | **Accounting & Cost Engine** | `app.accounting.tokens`, `app.accounting.costs` | Accurate token estimation (via `tiktoken` with fallback tokenizers) and financial calculations using Python `Decimal` to avoid floating-point drift. |
 | **Reliability & Resilience** | `app.routing.circuit_breaker`, `app.routing.retry`, `app.routing.health_monitor` | Three-state circuit breakers (`CLOSED`, `OPEN`, `HALF_OPEN`), exponential backoff with full jitter, and automatic upstream quota fallback. |
 | **Security & PII Shield** | `app.security.pii`, `app.core.security` | Virtual API Key SHA-256 authentication (`ig-...`) and zero-dependency regex-based PII detection/redaction for emails, API keys, and IPv4 addresses. |
-| **Frontend Dashboard** | `frontend/src/components/*` | Anti-AI-slop developer workbench built with React 18, Vite 6, Tailwind CSS, and Recharts. No TypeScript, Next.js, or heavyweight UI kits. |
+| **Telemetry & Analytics API**| `app.api.v1.analytics`, `app.api.v1.logs` | Real-time database aggregation endpoints for Overview charts, request timeseries, model breakdown, and complete audit trace inspection without blocking JWT requirements for developer views. |
+| **Frontend Dashboard** | `frontend/src/components/*` | Modern, light-toned developer workbench (`#f4f6f9` canvas, `#ffffff` panels) built with React 18, Vite 6, Tailwind CSS, and Recharts. |
 
 ---
 
@@ -163,20 +166,10 @@ IntelliGate does not rely on subjective or fabricated numbers; it includes a **r
 ### 4.1 Benchmark Dataset Composition
 
 The benchmark suite features 24 diverse prompts across 4 task domains, balanced evenly across complexity tiers:
-
-```
-                            BENCHMARK DATASET (24 Items)
-      ┌──────────────────┬──────────────────┬──────────────────┬──────────────────┐
-      │  Coding (6 items)│Reasoning (6 item)│ Writing (6 items)│Gen Q&A (6 items) │
-      ├──────────────────┼──────────────────┼──────────────────┼──────────────────┤
-      │• Palindrome (S)  │• Bat & Ball (S)  │• Headline Copy(S)│• Capital (S)     │
-      │• SQL Orders (S)  │• Water Lily (S)  │• Haiku Meter (S) │• Photosynthesis  │
-      │• Binary Search(M)│• Knights/Knaves(M│• Tech Memo (M)   │• HTTP 401 vs 403 │
-      │• Regex E.164 (M) │• Bayesian Med (M)│• Product Press(M)│• ACID Transact(M)│
-      │• Async LRU (C)   │• Relativity (C)  │• Crisis Exec (C) │• Quantum Super(C)│
-      │• Rust Pointer (C)│• 3-Switch Bulb(C)│• Sci-Fi Novel (C)│• Spec Relativity │
-      └──────────────────┴──────────────────┴──────────────────┴──────────────────┘
-```
+- **Coding (6 items)**: Palindrome detection (`simple`), Binary Search (`moderate`), Async LRU Cache with locks (`complex`), SQL grouped queries (`simple`), E.164 phone regex (`moderate`), Safe Rust pointer swaps (`complex`).
+- **Reasoning (6 items)**: Cognitive reflection bat & ball problem (`simple`), Exponential water lily growth (`simple`), Knights & Knaves logic puzzle (`moderate`), Bayesian false-positive analysis (`moderate`), Relativistic twin paradox calculations (`complex`), 3-switch bulb puzzle (`complex`).
+- **Writing (6 items)**: High-conversion headline copy (`simple`), Strict haiku 5-7-5 syllable meter (`simple`), Architectural executive technical memo (`moderate`), B2B product announcement (`moderate`), Multi-chapter crisis executive brief (`complex`), Narrative science fiction opening (`complex`).
+- **General Q&A (6 items)**: Geographical capital retrieval (`simple`), Photosynthesis chemical reactants (`simple`), HTTP 401 Unauthorized vs. 403 Forbidden RFC definitions (`moderate`), Database ACID transaction guarantees (`moderate`), Quantum superposition vs. entanglement (`complex`), Special relativity spacetime interval derivations (`complex`).
 
 ### 4.2 Deterministic Verification Methods
 
@@ -214,17 +207,11 @@ Below are the benchmark evaluation results recorded across the supported model r
 | `llama-3.3-70b-versatile` | **95 ms** | \$0.000590 | \$0.000790 | 128,000 | 99.2% |
 | `llama-3.1-8b-instant` | **45 ms** | **\$0.000050** | **\$0.000080** | 128,000 | 99.6% |
 
-### 5.3 Key Empirical Insights
-1. **The Groq LPU Speed Dividend**: Running open-weights models (`llama-3.3-70b`) on Groq LPUs delivers near-frontier coding ($0.90$) and reasoning ($0.89$) with **$95\text{ms}$ latency**—approximately $4\times$ faster than GPT-4o.
-2. **Gemini Context & Price Efficiency**: Gemini 1.5 Flash provides the lowest cost per 1M context tokens of any frontier ecosystem (\$0.075/1M), making it the optimal choice for high-volume moderate tasks.
-3. **The 8B Utility Niche**: While Llama 3.1 8B fails on complex algorithmic proofs, its $45\text{ms}$ turnaround time and $\$0.00005$ price make it unbeatable for simple categorizations, translations, and basic factual Q&A.
-
 ---
 
-## 6. Resilience, Caching & Fallback Architecture
+## 6. Resilience, Caching & Live Persistence Architecture
 
 ### 6.1 Deterministic Exact-Match Redis Caching
-IntelliGate implements tenant-isolated deterministic caching:
 - **Cache Fingerprint Generation**:
   $$\text{Key} = \text{SHA256}(\text{TenantID} \mathbin{\Vert} \text{Model} \mathbin{\Vert} \text{NormalizedMessages} \mathbin{\Vert} \text{Temperature})$$
 - **Cache Hit Latency**: Typically **$10\text{ms} - 15\text{ms}$** (a **$20\times - 30\times$ speedup** over upstream network calls).
@@ -239,51 +226,51 @@ Primary Candidate ──(Fail: Timeout/Quota 400/429)──► Runner-Up Candida
 ```
 If an upstream provider returns a fatal status code (such as OpenAI returning `insufficient_quota` or Groq rate limiting), the gateway automatically captures the exception, logs a warning, and executes the fallback candidate in under $200\text{ms}$ without surfacing a 500 error to the client.
 
-### 6.3 Circuit Breaker Pattern
-Each provider is protected by an independent finite state machine:
-- **`CLOSED`**: All traffic routes normally. Failure count tracked in a rolling window.
-- **`OPEN`**: Tripped when failure threshold ($\ge 5$ consecutive errors) is exceeded. Traffic is immediately redirected to alternative providers; zero upstream calls are made.
-- **`HALF_OPEN`**: After a 30-second cooldown, probe requests are permitted. If successful, state resets to `CLOSED`; if failures persist, state reverts to `OPEN`.
+### 6.3 Real-Time Request Persistence (Audit Trail)
+Unlike prototype proxies that log metrics solely to console stdout, IntelliGate persists every request directly to PostgreSQL:
+- **Asynchronous Execution**: Persistence runs non-blockingly right after response normalization.
+- **Audit Columns Stored**: `request_id`, `model_requested`, `model_used`, `status`, `prompt_tokens`, `completion_tokens`, `total_tokens`, `cost_usd` (Exact Python `Decimal`), `latency_ms`, and rich JSONB metadata containing detected category, complexity, and selected provider.
+- **Live Query Aggregation**: The dashboard `/api/v1/analytics/overview`, `/api/v1/analytics/breakdown`, and `/api/v1/logs` endpoints read directly from this table, providing a 100% authentic reflection of gateway traffic.
 
 ---
 
-## 7. Frontend Dashboard: Anti-AI-Slop Developer Workbench
+## 7. Frontend Dashboard: Light Developer Workbench
 
-The IntelliGate frontend ([frontend/](file:///e:/ai_pro/intelligate/frontend)) was created strictly under **Anti-AI-Slop** design principles. It rejects generic templates, saturated purple gradients, and floating marketing cards in favor of a dense, high-craft developer interface inspired by Linear, Cloudflare, and Datadog.
+The IntelliGate frontend ([frontend/](file:///e:/ai_pro/intelligate/frontend)) features a clean, high-craft **Light Mode Developer Workbench** inspired by Linear, Cloudflare Radar, and Datadog APM.
 
-### 7.1 Visual Design Tokens
-- **Background**: `#090b10` (Deep obsidian slate).
-- **Panels & Cards**: `#0d1117` with subtle `1px solid #1c2333` borders.
-- **Typography**: Clean monospace fonts (`JetBrains Mono`, `Fira Code`) for metrics, models, and traces; neutral system sans for prose.
-- **Status Accents**: Emerald green (`#10b981`) for cache hits and healthy routes; amber (`#f59e0b`) for moderate complexity; indigo (`#6366f1`) for complex frontier routes.
+### 7.1 Visual Palette & Craft Standards
+- **Page Background (`app-bg`)**: `#f4f6f9` (Soft, distraction-free neutral canvas).
+- **Panels & Cards (`app-panel`)**: `#ffffff` with crisp `1px solid #e2e8f0` borders.
+- **Primary Typography (`ink-primary`)**: `#0f172a` (High-contrast deep slate).
+- **Secondary & Muted Labels (`ink-secondary` / `ink-muted`)**: `#475569` and `#94a3b8`.
+- **Status Accents**: Emerald green (`#059669`) for cache hits and success; amber (`#d97706`) for moderate complexity and sample badges; royal blue (`#2563eb`) for intelligent routing and active navigation.
 
 ### 7.2 The Four Primary Views
 
 #### 1. Overview Dashboard (`OverviewView.jsx`)
-- **Operational Ribbon**: Displays Total Gateway Requests, Total Token Consumption, Gross Financial Spend (in exact USD), Average Global Latency, Error Rate, and Active Providers.
-- **Telemetry Charts**: Daily request volume vs. cache savings using Recharts.
-- **Category Spectrum**: Visual breakdown of traffic across Coding, Reasoning, Writing, and General Q&A.
+- **Operational KPI Strip**: Displays live Total Requests, Token Throughput, Exact Gateway Spend (USD), Mean Latency, Cache Hit Rate, and Active Providers.
+- **Sample Data Badge**: When the database is newly initialized, an amber notification informs developers that sample data is displayed until live requests populate the tables.
+- **Dynamic Telemetry Charts**: Recharts area graph depicting daily request throughput and cache hits alongside the Task Classification Spectrum.
 
 #### 2. LLM Playground (`PlaygroundView.jsx`)
-- **Interactive Workbench**: Test prompt inputs against `"intelligent"`, `"lowest_cost"`, or direct model targets.
-- **Candidate Scoring Matrix**: Live table showing every candidate model's normalized Quality, Cost, and Latency scores alongside their final rank and composite utility score.
-- **Routing Explanation Panel**: Human-readable explanation of why the specific model was selected based on detected task complexity and active weighting.
-- **Response Inspector**: Displays response text, live execution latency, token counts, and cache status.
+- **Interactive Workbench**: Select between `INTELLIGENT ROUTER`, `LOWEST COST`, or `DIRECT PINNED` modes.
+- **Generation Sliders**: Adjust `TEMP` ($0.0 - 1.0$) and `MAX_TOKENS` ($50 - 2,000$).
+- **5-Cell Telemetry Ribbon**: Real-time breakdown displaying `RESOLVED MODEL`, `ROUNDTRIP (MS)`, `TOKENS`, `EXACT CACHE`, and **`COST USD`** (exact decimal calculated from token pricing).
+- **Transparent Rationale Callout**: Decision justification highlighted with a prominent left accent border (`border-l-4 border-metric-blue`).
+- **Complete Scoring Matrix**: Live candidate ranking table detailing Quality ($Q$), Cost Score, Latency ($ms$), Unit Price (`$/1K`), and Composite Utility.
 
 #### 3. Model Performance & Benchmarking (`ModelPerformanceView.jsx`)
 - **Capability Matrix**: Direct side-by-side comparison of all 6 registered models across coding, reasoning, writing, latency, and cost per 1K tokens.
-- **Empirical Radar / Bar Views**: Visual quality score comparisons across domains.
-- **Live Benchmark Runner**: Trigger real evaluation runs across the benchmark suite with live progress indicators.
+- **Live Benchmark Suite Runner**: Trigger real evaluation runs across the benchmark suite with live progress indicators.
 
 #### 4. Request History & Audit Log (`RequestHistoryView.jsx`)
 - **Historical Audit Table**: Filterable log of past requests with timestamps, resolved models, providers, latency, and cost.
-- **Trace Inspector**: Click any request to view prompt details, PII redaction audit logs, and complete routing rationale.
+- **Empty-State Notice**: Clean, informative placeholder when no requests have been logged.
+- **Distributed Trace Inspector**: Click any request to view prompt details, PII redaction audit logs, and complete routing rationale.
 
 ---
 
 ## 8. API Quickstart & Integration Guide
-
-IntelliGate provides a drop-in replacement for OpenAI endpoints.
 
 ### 8.1 Authentication
 Authenticate requests using the Bearer token scheme:
@@ -306,14 +293,15 @@ curl -X POST http://localhost:8000/v1/chat/completions \
         "content": "Design an asynchronous distributed worker pool in Python with error backoff."
       }
     ],
-    "temperature": 0.2
+    "temperature": 0.2,
+    "max_tokens": 600
   }'
 ```
 
 **Response Format**:
 ```json
 {
-  "id": "chatcmpl-a81d4e68-230f-4889-a9a7-9336d398f5a1",
+  "id": "req_8b31f7c2a490",
   "object": "chat.completion",
   "created": 1731952400,
   "model": "groq/llama-3.3-70b-versatile",
@@ -331,6 +319,14 @@ curl -X POST http://localhost:8000/v1/chat/completions \
     "prompt_tokens": 28,
     "completion_tokens": 342,
     "total_tokens": 370
+  },
+  "routing_decision": {
+    "mode": "intelligent",
+    "task_category": "coding",
+    "complexity": "complex",
+    "selected_model": "llama-3.3-70b-versatile",
+    "selected_provider": "groq",
+    "reason": "Selected Groq Llama 3.3 70B via Intelligent Routing for complex coding..."
   }
 }
 ```
@@ -353,6 +349,7 @@ response = client.chat.completions.create(
       {"role": "user", "content": "Explain the difference between SQL and NoSQL in two bullet points."}
     ],
     temperature=0.2,
+    max_tokens=300,
 )
 
 print(f"Resolved Model: {response.model}")
@@ -367,7 +364,7 @@ The entire codebase is verified by an extensive automated test suite covering un
 
 ```bash
 # Executed via: pytest backend/tests -v
-============================= 30 passed in 4.96s ==============================
+============================= 30 passed in 6.72s ==============================
 ```
 
 ### Verified Test Categories:
@@ -413,4 +410,3 @@ The entire codebase is verified by an extensive automated test suite covering un
 ---
 
 *IntelliGate Architecture Documentation — Maintained in repository root: [INTELLIGATE_DEEP_DIVE.md](file:///e:/ai_pro/intelligate/INTELLIGATE_DEEP_DIVE.md).*
-
