@@ -1,0 +1,126 @@
+version: '3.8'
+
+services:
+  # ── Backend: IntelliGate FastAPI Gateway ────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: intelligate-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=production
+      - DEBUG=false
+      - DATABASE_URL=postgresql+asyncpg://intelligate:intelligate_secret_pass@postgres:5432/intelligate
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY:-e3d5bfe7559507229598486a27b1d174a195c7c1e6b568271e204015e9b049f6}
+      - FERNET_KEY=${FERNET_KEY:-HPcCDO2RT6rJ1vRa3O3XtvlsyOaZG1yjHl0FUyUO32E=}
+      - CORS_ORIGINS=["http://localhost:3000","http://127.0.0.1:3000"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - intelligate-net
+
+  # ── Frontend: IntelliGate Next.js Dashboard ─────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: intelligate-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+    networks:
+      - intelligate-net
+
+  # ── Database: PostgreSQL 17 with persistent volume ──────────────────────────
+  postgres:
+    image: postgres:17-alpine
+    container_name: intelligate-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=intelligate
+      - POSTGRES_PASSWORD=intelligate_secret_pass
+      - POSTGRES_DB=intelligate
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U intelligate -d intelligate"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - intelligate-net
+
+  # ── Cache & Rate Limiting: Redis 7.4 ─────────────────────────────────────────
+  redis:
+    image: redis:7.4-alpine
+    container_name: intelligate-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy volatile-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - intelligate-net
+
+  # ── Metrics: Prometheus ─────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    container_name: intelligate-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - intelligate-net
+
+  # ── Observability: Grafana ──────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: intelligate-grafana
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infrastructure/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - intelligate-net
+
+volumes:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  intelligate-net:
+    driver: bridge
+
