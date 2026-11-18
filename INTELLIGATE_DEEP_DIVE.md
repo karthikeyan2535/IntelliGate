@@ -14,42 +14,54 @@ Modern enterprise applications routinely suffer from **LLM over-provisioning**: 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
 │                          INCOMING USER PROMPT                          │
-│         "Write a Python script to parse JSON and handle errors"        │
+│         "Write an asynchronous LRU Cache in Python with O(1) ops"      │
 └───────────────────────────────────┬────────────────────────────────────┘
                                     │
                                     ▼
 ┌────────────────────────────────────────────────────────────────────────┐
 │                 STAGE 1: TASK CLASSIFIER & COMPLEXITY                  │
-│       Category: CODING (confidence: 0.92)  |  Complexity: MODERATE     │
+│       Category: CODING (confidence: 0.94)  |  Complexity: COMPLEX      │
+│  * Optional manual overrides: x-override-category / complexity headers │
 └───────────────────────────────────┬────────────────────────────────────┘
                                     │
                                     ▼
 ┌────────────────────────────────────────────────────────────────────────┐
-│             STAGE 2: QUALITY GATING & MULTI-OBJECTIVE ROUTER           │
-│   • Quality Gate: Q >= 0.80 (Disqualifies 8B models with Q=0.76)       │
-│   • Log-Cost Normalization & Non-Linear Quality Amplification (Q^1.8)  │
-│   • Candidate Scores: Gemini Flash (0.86) vs Llama 70B (0.84) vs 4o    │
-│   • Winner: Gemini 1.5 Flash (Quality: 0.82, Latency: 160ms, $0.000075)│
+│               STAGE 2: QUALITY GATING & HARD CONSTRAINTS               │
+│  • Context Window Check: ReqTokens <= Model Context Limit              │
+│  • Circuit Breaker Check: State != OPEN                                │
+│  • Quality Gate: Q_coding >= 0.88 for Complex tasks                    │
+│    -> Disqualifies 8B models (Q=0.76) & Flash (Q=0.82)                 │
+│    -> Disqualified models recorded in Rejected Candidates Log          │
 └───────────────────────────────────┬────────────────────────────────────┘
                                     │
                                     ▼
 ┌────────────────────────────────────────────────────────────────────────┐
-│             STAGE 3: DETERMINISTIC REDIS CACHE (SHA-256)               │
+│             STAGE 3: LINEAR MULTI-OBJECTIVE UTILITY SCORING            │
+│       U(m) = w_q · Q(m) + w_c · C(m) + w_l · L(m) + w_r · R(m)         │
+│  • Complex Weights: w_q=0.60, w_c=0.15, w_l=0.15, w_r=0.10            │
+│  • Log-Cost Normalization prevents price distortion                    │
+│  • Candidates: Llama 3.3 70B (U=0.87) vs GPT-4o (U=0.84)               │
+│  • Winner: Groq Llama 3.3 70B (Quality: 0.90, Latency: 95ms, $0.00059)│
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│             STAGE 4: DETERMINISTIC REDIS CACHE (SHA-256)               │
 │                   MISS (Tenant-isolated fingerprint)                   │
 └───────────────────────────────────┬────────────────────────────────────┘
                                     │
                                     ▼
 ┌────────────────────────────────────────────────────────────────────────┐
-│             STAGE 4: UNIFIED UPSTREAM PROVIDER EXECUTION               │
+│             STAGE 5: UNIFIED UPSTREAM PROVIDER EXECUTION               │
 │           Google Gemini / Groq Cloud / OpenAI (with Fallbacks)         │
 └───────────────────────────────────┬────────────────────────────────────┘
                                     │
                                     ▼
 ┌────────────────────────────────────────────────────────────────────────┐
-│       STAGE 5: TOKEN ACCOUNTING, PERSISTENCE & TELEMETRY STREAM        │
-│   • Exact Decimal Financial Calculations (input/output tokens)         │
-│   • Asynchronous RequestLog DB persistence (zero-overhead)             │
-│   • Real-time Analytics & Audit Trail emission                         │
+│       STAGE 6: TOKEN ACCOUNTING, PERSISTENCE & TELEMETRY STREAM        │
+│  • Exact Decimal Financial Calculations (input/output tokens)          │
+│  • Asynchronous RequestLog DB persistence (zero-overhead)              │
+│  • Live Telemetry Ribbon & Pipeline Stage Trace emission               │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -64,15 +76,15 @@ IntelliGate is architected around a clean separation of concerns, avoiding britt
 | Subsystem | Primary Python Modules | Purpose & Implementation |
 | :--- | :--- | :--- |
 | **API Gateway** | `app.api.v1.gateway`, `app.schemas.gateway` | Full OpenAI-compatible `/v1/chat/completions` and `/v1/models` endpoints. Supports streaming SSE, non-streaming, custom routing headers, and session-backed audit persistence. |
-| **Task Classifier** | `app.routing.classifier` | Multi-regex and structural heuristic analyzer. Detects task category (`coding`, `reasoning`, `writing`, `general_qa`) and independently calculates complexity (`simple`, `moderate`, `complex`). |
-| **Intelligent Routing Engine** | `app.routing.engine`, `app.evaluation.profiles` | Gated multi-objective optimization engine balancing empirical quality ($Q^{1.8}$), log-normalized cost, latency, and reliability. Builds fallback priority chains. |
-| **Evaluation Framework** | `app.evaluation.dataset`, `app.evaluation.evaluator` | Curated 24-prompt deterministic benchmark suite. Measures quality, token efficiency, and response latency across models. Dynamically updates profile registry. |
+| **Task Classifier** | `app.routing.classifier` | Multi-regex and structural heuristic analyzer. Detects task category (`coding`, `reasoning`, `writing`, `general_qa`) and independently calculates complexity (`simple`, `moderate`, `complex`). Supports manual overrides. |
+| **Intelligent Routing Engine** | `app.routing.engine`, `app.evaluation.profiles` | Gated multi-objective optimization engine balancing empirical quality ($Q$), log-normalized cost ($C$), min-max latency ($L$), and reliability ($R$). Records applied weights and explicit rejected candidate logs. |
+| **Evaluation Framework** | `app.evaluation.dataset`, `app.evaluation.evaluator`, `app.api.v1.evaluation` | Curated 24-prompt deterministic benchmark suite. Measures quality, token efficiency, and response latency across models. Persists `EvaluationRecord` to PostgreSQL and feeds back into `ProfileManager`. |
 | **Provider Adapters** | `app.providers.*` | Normalized adapter interface (`BaseProvider`) wrapping OpenAI (`gpt-4o`, `gpt-4o-mini`), Google Gemini (`gemini-1.5-pro`, `gemini-1.5-flash`), and Groq (`llama-3.3-70b-versatile`, `llama-3.1-8b-instant`). |
 | **Exact-Match Cache** | `app.caching.fingerprint`, `app.caching.redis_cache` | SHA-256 deterministic request fingerprinting with tenant isolation. Falls back smoothly to in-memory LRU cache if Redis is offline. |
 | **Accounting & Cost Engine** | `app.accounting.tokens`, `app.accounting.costs` | Accurate token estimation (via `tiktoken` with fallback tokenizers) and financial calculations using Python `Decimal` to avoid floating-point drift. |
 | **Reliability & Resilience** | `app.routing.circuit_breaker`, `app.routing.retry`, `app.routing.health_monitor` | Three-state circuit breakers (`CLOSED`, `OPEN`, `HALF_OPEN`), exponential backoff with full jitter, and automatic upstream quota fallback. |
 | **Security & PII Shield** | `app.security.pii`, `app.core.security` | Virtual API Key SHA-256 authentication (`ig-...`) and zero-dependency regex-based PII detection/redaction for emails, API keys, and IPv4 addresses. |
-| **Telemetry & Analytics API**| `app.api.v1.analytics`, `app.api.v1.logs` | Real-time database aggregation endpoints for Overview charts, request timeseries, model breakdown, and complete audit trace inspection without blocking JWT requirements for developer views. |
+| **Telemetry & Analytics API**| `app.api.v1.analytics`, `app.api.v1.logs` | Real-time database aggregation endpoints for Overview charts, request timeseries, model breakdown, and complete audit trace inspection without blocking JWT requirements for developer workbench views. |
 | **Frontend Dashboard** | `frontend/src/components/*` | Modern, light-toned developer workbench (`#f4f6f9` canvas, `#ffffff` panels) built with React 18, Vite 6, Tailwind CSS, and Recharts. |
 
 ---
@@ -105,44 +117,54 @@ IntelliGate decouples **Category Classification** from **Complexity Estimation**
 - `MODERATE`: Score $\ge 1.2$
 - `SIMPLE`: Score $< 1.2$
 
+3. **Manual Overrides**:
+   The engine supports explicit overrides via `x_override_category` and `x_override_complexity`. When provided, the classifier records `is_overridden: true` along with `original_category` and `original_complexity`, allowing developers to test any routing edge case directly in the Playground.
+
 ---
 
 ### 3.2 The Gated Multi-Objective Scoring Formulation
 
 To prevent small, cheap models from dominating due to speed alone, IntelliGate implements a **two-phase evaluation pipeline**:
 
-#### Phase 1: Cognitive Quality Gating
-Candidates must meet a strict minimum category quality score ($Q_{cat}$) to be eligible for ranking:
+#### Phase 1: Cognitive Quality Gating & Hard Constraints
+Before utility scoring, candidates must clear hard operational and quality requirements:
+- **Context Window Verification**: Required tokens (`input + max_tokens`) must fit within the model's context window.
+- **Circuit Breaker State**: Models in an `OPEN` circuit breaker state are disqualified.
+- **Cognitive Quality Gating**: Candidates must meet a strict minimum category quality score ($Q_{cat}$):
 
 $$\text{Eligible}(P) = \{ m \in \text{Models} \mid Q_{cat}(m) \ge \text{Threshold}(\text{Complexity}) \}$$
 
 - **`COMPLEX` Tasks**: Minimum Quality Threshold = **$0.88$**.  
-  *Eliminates 8B models ($Q \approx 0.76$). Only frontier/large models (`gpt-4o`, `gemini-1.5-pro`, `llama-3.3-70b-versatile`) enter ranking.*
+  *Eliminates 8B models ($Q \approx 0.76$) and smaller Flash models. Only frontier/large models (`gpt-4o`, `gemini-1.5-pro`, `llama-3.3-70b-versatile`) enter ranking.*
 - **`MODERATE` Tasks**: Minimum Quality Threshold = **$0.80$**.  
   *Allows balanced models (`gemini-1.5-flash`, `llama-3.3-70b`, `gpt-4o-mini`).*
 - **`SIMPLE` Tasks**: Minimum Quality Threshold = **$0.70$**.  
   *All registered models eligible.*
 
-#### Phase 2: Multi-Objective Utility Function
-For eligible models, the composite score is calculated using non-linear quality amplification and log-normalized cost:
+**Explicit Rejection Logging:**
+Every model that fails Phase 1 is appended to `rejected_candidates` with an explicit reason string (e.g. `Quality score 0.84 < 0.88 threshold for complex coding`). This log is returned in API responses and rendered prominently in the Playground UI.
 
-$$U(m) = w_q \cdot \left(Q_{cat}(m)\right)^{1.8} + w_c \cdot \text{CostNorm}(m) + w_l \cdot \text{LatNorm}(m) + w_r \cdot \text{Reliability}(m)$$
+#### Phase 2: Transparent Linear Utility Function
+For eligible models, the composite score is calculated using a transparent linear utility formula:
+
+$$U(m) = w_q \cdot Q_{cat}(m) + w_c \cdot \text{CostNorm}(m) + w_l \cdot \text{LatNorm}(m) + w_r \cdot \text{Reliability}(m)$$
 
 Where:
-- **Quality Amplification ($Q^{1.8}$)**: Non-linear scaling ensures superior reasoning capability ($0.96$ vs $0.80$) carries an exponential advantage rather than a flat linear offset.
+- **Category Quality ($Q_{cat}(m)$)**: Empirical benchmark quality measured for the detected or overridden task category.
 - **Logarithmic Cost Normalization**:
-  $$\text{CostNorm}(m) = \frac{\ln(\text{Cost}_{\max}) - \ln(\text{Cost}_m)}{\ln(\text{Cost}_{\max}) - \ln(\text{Cost}_{\min})}$$
-  *Prevents a $50\times$ price disparity from completely zeroing out the utility of frontier models.*
-- **Latency Normalization**:
-  $$\text{LatNorm}(m) = \frac{\text{Lat}_{\max} - \text{Lat}_m}{\text{Lat}_{\max} - \text{Lat}_{\min}}$$
+  $$\text{CostNorm}(m) = 1 - \frac{\ln(1 + \text{Cost}_m) - \ln(1 + \text{Cost}_{\min})}{\ln(1 + \text{Cost}_{\max}) - \ln(1 + \text{Cost}_{\min})}$$
+  *Log-scaling balances price orders of magnitude ($50\times$ spread between 8B and frontier models) without completely zeroing out frontier models.*
+- **Min-Max Latency Normalization**:
+  $$\text{LatNorm}(m) = 1 - \frac{\text{Lat}_m - \text{Lat}_{\min}}{\text{Lat}_{\max} - \text{Lat}_{\min}}$$
+- **Operational Reliability**: Measured provider success rate (typically $0.990 - 0.998$).
 
 #### Dynamic Weight Matrix by Complexity:
 
 | Complexity Level | Quality Weight ($w_q$) | Cost Weight ($w_c$) | Latency Weight ($w_l$) | Reliability Weight ($w_r$) | Primary Goal |
 | :--- | :---: | :---: | :---: | :---: | :--- |
-| **`COMPLEX`** | **0.70** | 0.15 | 0.10 | 0.05 | Maximum reasoning depth & zero hallucinations |
-| **`MODERATE`** | **0.55** | 0.25 | 0.15 | 0.05 | High fidelity with optimized economic efficiency |
-| **`SIMPLE`** | **0.35** | 0.40 | 0.20 | 0.05 | Sub-100ms response & minimum token expenditure |
+| **`COMPLEX`** | **0.60** | 0.15 | 0.15 | 0.10 | Maximum reasoning depth & architectural correctness |
+| **`MODERATE`** | **0.40** | 0.30 | 0.20 | 0.10 | High fidelity with optimized economic efficiency |
+| **`SIMPLE`** | **0.20** | 0.45 | 0.25 | 0.10 | Sub-100ms response & minimum token expenditure |
 
 ---
 
@@ -151,7 +173,7 @@ Where:
 IntelliGate supports three user-selectable routing modes via request headers or the `model` parameter:
 
 1. **`intelligent` (Default / `"auto"`)**:
-   Runs task classification, complexity estimation, quality gating, and multi-objective ranking. Automatically constructs a fallback priority list from runners-up.
+   Runs task classification, complexity estimation, quality gating, and linear utility ranking. Automatically constructs a fallback priority list from runners-up.
 2. **`lowest_cost` (`"fast-model"`)**:
    Sorts all context-eligible models strictly by combined token price (`input_cost + output_cost`) and routes to the cheapest active model.
 3. **`direct` (`"gpt-4o"`, `"llama-3.3-70b-versatile"`, etc.)**:
@@ -178,6 +200,10 @@ To eliminate evaluation variance without incurring recursive LLM-as-a-judge API 
 - **Regex Constraint Validation (`"regex"`)**: Validates strict formal pattern outputs (e.g., E.164 phone regex syntax, mathematical numerical answers).
 - **JSON AST Validation (`"json_valid"`)**: Parses responses through JSON deserializers to confirm valid schema formatting.
 - **Structural Bounds (`"length_check"`)**: Enforces concise constraints (e.g., verifying that a summary does not exceed specified line counts).
+
+### 4.3 Database Persistence & Closed Feedback Loop
+- **`EvaluationRecord` Storage**: Each benchmark run saves an immutable record in PostgreSQL containing `model_id`, `provider_name`, `total_prompts`, `passed_prompts`, `overall_quality_score`, `category_scores`, `avg_latency_ms`, `duration_seconds`, and full itemized prompt results (`item_details`).
+- **Closed-Loop Calibration**: At the end of every benchmark run, `ProfileManager.update_profile(...)` is called automatically with the measured category scores and latency. Future routing decisions immediately utilize the updated scores without server restarts.
 
 ---
 
@@ -215,7 +241,7 @@ Below are the benchmark evaluation results recorded across the supported model r
 - **Cache Fingerprint Generation**:
   $$\text{Key} = \text{SHA256}(\text{TenantID} \mathbin{\Vert} \text{Model} \mathbin{\Vert} \text{NormalizedMessages} \mathbin{\Vert} \text{Temperature})$$
 - **Cache Hit Latency**: Typically **$10\text{ms} - 15\text{ms}$** (a **$20\times - 30\times$ speedup** over upstream network calls).
-- **Cache Hit Headers**: Successful cache hits return `X-Gateway-Cache: HIT`, setting upstream token usage to zero.
+- **Cache Hit Headers**: Successful cache hits return `X-IntelliGate-Cache: HIT`, setting upstream token usage to zero.
 - **In-Memory Fallback**: If Redis encounters connection timeouts, IntelliGate automatically activates a thread-safe in-memory cache without dropping client requests.
 
 ### 6.2 Pre-Commit Provider Fallback Chain
@@ -249,24 +275,31 @@ The IntelliGate frontend ([frontend/](file:///e:/ai_pro/intelligate/frontend)) f
 
 #### 1. Overview Dashboard (`OverviewView.jsx`)
 - **Operational KPI Strip**: Displays live Total Requests, Token Throughput, Exact Gateway Spend (USD), Mean Latency, Cache Hit Rate, and Active Providers.
-- **Sample Data Badge**: When the database is newly initialized, an amber notification informs developers that sample data is displayed until live requests populate the tables.
+- **Sample Data Notice**: When the database is newly initialized, an amber notification informs developers that sample data is displayed until live requests populate the tables.
 - **Dynamic Telemetry Charts**: Recharts area graph depicting daily request throughput and cache hits alongside the Task Classification Spectrum.
 
 #### 2. LLM Playground (`PlaygroundView.jsx`)
 - **Interactive Workbench**: Select between `INTELLIGENT ROUTER`, `LOWEST COST`, or `DIRECT PINNED` modes.
-- **Generation Sliders**: Adjust `TEMP` ($0.0 - 1.0$) and `MAX_TOKENS` ($50 - 2,000$).
+- **Prompt Controls**: Configurable **System Prompt** textarea, User Prompt input, **Temperature** slider ($0.0 - 1.0$), and **Max Tokens** input ($50 - 4,000$), with Clear and Reset actions.
+- **Manual Overrides**: Category override selector (`Auto`, `Coding`, `Reasoning`, `Writing`, `General Q&A`) and Complexity override selector (`Auto`, `Simple`, `Moderate`, `Complex`).
 - **5-Cell Telemetry Ribbon**: Real-time breakdown displaying `RESOLVED MODEL`, `ROUNDTRIP (MS)`, `TOKENS`, `EXACT CACHE`, and **`COST USD`** (exact decimal calculated from token pricing).
-- **Transparent Rationale Callout**: Decision justification highlighted with a prominent left accent border (`border-l-4 border-metric-blue`).
-- **Complete Scoring Matrix**: Live candidate ranking table detailing Quality ($Q$), Cost Score, Latency ($ms$), Unit Price (`$/1K`), and Composite Utility.
+- **Transparent Decision Card**:
+  - Decision justification with prominent left accent border (`border-l-4 border-metric-blue`).
+  - **Applied Weights Strip**: Displays exact weights ($w_q, w_c, w_l, w_r$) applied for the detected complexity tier.
+  - **Candidate Ranking Table**: Live candidate breakdown detailing Quality ($Q$), Cost Score, Latency ($ms$), Input/Output Price (`$/1K`), and Composite Utility.
+  - **Rejected Candidates Log**: Clear list of disqualified models with exact rejection rationales (e.g. `Quality score 0.84 < 0.88 threshold for complex coding`).
 
 #### 3. Model Performance & Benchmarking (`ModelPerformanceView.jsx`)
-- **Capability Matrix**: Direct side-by-side comparison of all 6 registered models across coding, reasoning, writing, latency, and cost per 1K tokens.
+- **Capability Matrix**: Direct side-by-side comparison of all 6 registered models across coding, reasoning, writing, latency, and cost per 1K tokens with provider filters.
+- **Quality Comparison Bar Chart**: Recharts grouped bar chart comparing Coding, Reasoning, and Writing quality across models.
 - **Live Benchmark Suite Runner**: Trigger real evaluation runs across the benchmark suite with live progress indicators.
+- **Empirical Benchmark Run History**: Persistent table of past benchmark runs fetched directly from PostgreSQL.
+- **Run Inspector Modal**: Detailed drilldown into any past benchmark run displaying overall score, latency, and itemized prompt results (category, pass/fail, latency, and response sample).
 
 #### 4. Request History & Audit Log (`RequestHistoryView.jsx`)
+- **Interactive Filter Toolbar**: Filter audit logs by Model, HTTP Status (200 OK, 500 Error), Cache (HIT, MISS), and live search by Request ID or model.
 - **Historical Audit Table**: Filterable log of past requests with timestamps, resolved models, providers, latency, and cost.
-- **Empty-State Notice**: Clean, informative placeholder when no requests have been logged.
-- **Distributed Trace Inspector**: Click any request to view prompt details, PII redaction audit logs, and complete routing rationale.
+- **Step-by-Step Distributed Trace Inspector**: Click any request to view execution timings across pipeline stages (`security_pii_in`, `task_classification`, `routing_decision`, `provider_invocation`, `accounting_storage`) and PII redaction audit logs.
 
 ---
 
@@ -326,7 +359,23 @@ curl -X POST http://localhost:8000/v1/chat/completions \
     "complexity": "complex",
     "selected_model": "llama-3.3-70b-versatile",
     "selected_provider": "groq",
-    "reason": "Selected Groq Llama 3.3 70B via Intelligent Routing for complex coding..."
+    "reason": "Selected Groq Llama 3.3 70B via Intelligent Routing for complex coding (Utility: 0.872)...",
+    "applied_weights": {
+      "quality": 0.60,
+      "cost": 0.15,
+      "latency": 0.15,
+      "reliability": 0.10
+    },
+    "rejected_candidates": [
+      {
+        "model_id": "llama-3.1-8b-instant",
+        "reason": "Quality score 0.76 < 0.88 threshold for complex coding"
+      },
+      {
+        "model_id": "gemini-1.5-flash",
+        "reason": "Quality score 0.82 < 0.88 threshold for complex coding"
+      }
+    ]
   }
 }
 ```
@@ -346,6 +395,7 @@ client = OpenAI(
 response = client.chat.completions.create(
     model="intelligent",  # Triggers task classifier & evaluation-driven routing
     messages=[
+      {"role": "system", "content": "You are a senior systems engineer."},
       {"role": "user", "content": "Explain the difference between SQL and NoSQL in two bullet points."}
     ],
     temperature=0.2,
@@ -360,11 +410,11 @@ print(f"Content: {response.choices[0].message.content}")
 
 ## 9. Verification & Test Suite Summary
 
-The entire codebase is verified by an extensive automated test suite covering unit, integration, and security layers:
+The entire codebase is verified by an automated test suite covering unit, integration, and security layers:
 
 ```bash
 # Executed via: pytest backend/tests -v
-============================= 30 passed in 6.72s ==============================
+============================= 30 passed in 6.69s ==============================
 ```
 
 ### Verified Test Categories:
@@ -405,7 +455,10 @@ The entire codebase is verified by an extensive automated test suite covering un
 > **Answer**: LLM-as-a-judge (e.g. GPT-4 evaluating Llama 3) introduces recursive latency, nondeterministic evaluation drift, and recurring API costs. For core gateway calibration, deterministic rules (syntax AST validation, regex constraints, and deterministic substrings) provide $100\%$ reproducible, instant scoring at zero inference cost. IntelliGate supports LLM judges for subjective tasks, but uses deterministic evaluation as the bedrock for model capability profiles.
 
 ### Q3: Why is Logarithmic Cost Normalization necessary?
-> **Answer**: Frontier models cost approximately $\$0.0025 - \$0.0100$ per 1K tokens, whereas small models cost $\$0.00005$. Under naive linear min-max normalization, the high-tier model receives a score of $0.0$, completely wiping out its utility even when prompt complexity demands frontier intelligence. Logarithmic scaling ($\ln(\text{cost})$) normalizes price orders of magnitude, properly penalizing cost without creating a winner-take-all bias for the cheapest model.
+> **Answer**: Frontier models cost approximately $\$0.0025 - \$0.0100$ per 1K tokens, whereas small models cost $\$0.00005$. Under naive linear min-max normalization, the high-tier model receives a score of $0.0$, completely wiping out its utility even when prompt complexity demands frontier intelligence. Logarithmic scaling ($\ln(1 + \text{cost})$) normalizes price orders of magnitude, properly penalizing cost without creating a winner-take-all bias for the cheapest model.
+
+### Q4: How does the system handle manual overrides vs heuristic detection?
+> **Answer**: In production and debugging environments, developers need to experiment with how routing responds to edge cases. IntelliGate allows optional `x-override-category` and `x-override-complexity` headers. The pipeline tags the decision with `is_overridden: true`, records the original heuristic findings for comparison, applies the user's forced parameters to the quality gate and utility weighting, and logs the complete candidate rankings and rejections.
 
 ---
 
