@@ -6,6 +6,7 @@ Returns optimal model selection with transparent, human-readable routing explana
 """
 from __future__ import annotations
 
+import math
 import random
 from dataclasses import dataclass, field
 from decimal import Decimal
@@ -209,49 +210,77 @@ class RoutingEngine:
         category = classification.category.value
         complexity = classification.complexity
 
-        # Dynamic weight configuration based on task complexity
+        # 1. Quality-Tier Gating: Strictly filter candidate pool based on task complexity
         if complexity == ComplexityLevel.COMPLEX:
-            # Complex tasks (e.g. complex algorithms, advanced proofs): Quality is paramount!
-            w_quality = 0.60
-            w_cost = 0.20
-            w_latency = 0.15
+            # Complex tasks (e.g. distributed systems, formal proofs, complex architectures):
+            # Frontier models required: minimum quality 0.88
+            min_quality_threshold = 0.88
+            w_quality = 0.70
+            w_cost = 0.15
+            w_latency = 0.10
             w_reliability = 0.05
-        elif complexity == ComplexityLevel.SIMPLE:
-            # Simple tasks (e.g. quick Q&A, formatting): Cost & speed are prioritized!
-            w_quality = 0.30
-            w_cost = 0.45
-            w_latency = 0.20
+        elif complexity == ComplexityLevel.MODERATE:
+            # Moderate tasks (e.g. full functions, refactors, detailed analyses):
+            # Mid-to-high models required: minimum quality 0.80
+            min_quality_threshold = 0.80
+            w_quality = 0.55
+            w_cost = 0.25
+            w_latency = 0.15
             w_reliability = 0.05
         else:
-            # Moderate complexity: Balanced trade-off
-            w_quality = 0.45
-            w_cost = 0.35
-            w_latency = 0.15
+            # Simple tasks (e.g. quick Q&A, greetings, single conversions):
+            # All models eligible, cost & latency prioritized
+            min_quality_threshold = 0.70
+            w_quality = 0.35
+            w_cost = 0.40
+            w_latency = 0.20
             w_reliability = 0.05
 
-        # Normalize metrics across eligible candidate pool
-        costs = [float(p.input_cost_per_1k) for p in profiles]
-        latencies = [p.avg_latency_ms for p in profiles]
+        # Filter candidates meeting the quality gate for this category
+        gated_candidates = [
+            p for p in profiles
+            if p.get_quality_for_category(category) >= min_quality_threshold
+        ]
+        # In case no candidate passes gate, fallback to top 3 by category quality
+        if not gated_candidates:
+            gated_candidates = sorted(
+                profiles,
+                key=lambda p: p.get_quality_for_category(category),
+                reverse=True,
+            )[:3]
+
+        # 2. Multi-Objective Utility Optimization across eligible gated candidates
+        costs = [float(p.input_cost_per_1k) for p in gated_candidates]
+        latencies = [p.avg_latency_ms for p in gated_candidates]
 
         min_cost, max_cost = min(costs), max(costs)
         min_lat, max_lat = min(latencies), max(latencies)
 
+        # Log cost range for smooth scaling (prevents extreme ratios from zeroing out high-tier models)
+        log_costs = [math.log(max(c, 1e-6)) for c in costs]
+        min_log_cost, max_log_cost = min(log_costs), max(log_costs)
+
         scored_candidates: list[CandidateScore] = []
 
-        for p in profiles:
-            quality = p.get_quality_for_category(category)
+        for p in gated_candidates:
+            raw_quality = p.get_quality_for_category(category)
+            # Non-linear amplification: quality^1.8 ensures top frontier models gain substantial advantage
+            amplified_quality = raw_quality ** 1.8
 
-            # Cost score (inverted: 1.0 = cheapest, 0.0 = most expensive)
-            p_cost = float(p.input_cost_per_1k)
-            cost_norm = (max_cost - p_cost) / (max_cost - min_cost) if max_cost > min_cost else 1.0
+            # Log-normalized cost score (1.0 = lowest cost, 0.0 = highest cost in pool)
+            p_log_cost = math.log(max(float(p.input_cost_per_1k), 1e-6))
+            if max_log_cost > min_log_cost:
+                cost_norm = (max_log_cost - p_log_cost) / (max_log_cost - min_log_cost)
+            else:
+                cost_norm = 1.0
 
-            # Latency score (inverted: 1.0 = fastest, 0.0 = slowest)
+            # Latency score (1.0 = fastest, 0.0 = slowest in pool)
             p_lat = p.avg_latency_ms
             lat_norm = (max_lat - p_lat) / (max_lat - min_lat) if max_lat > min_lat else 1.0
 
             # Multi-objective utility function
             overall = (
-                (w_quality * quality) +
+                (w_quality * amplified_quality) +
                 (w_cost * cost_norm) +
                 (w_latency * lat_norm) +
                 (w_reliability * p.reliability)
@@ -261,11 +290,11 @@ class RoutingEngine:
                 model_id=p.model_id,
                 provider=p.provider,
                 overall_score=round(overall, 4),
-                quality_score=round(quality, 3),
+                quality_score=round(raw_quality, 3),
                 cost_score=round(cost_norm, 3),
                 latency_score=round(lat_norm, 3),
                 reliability_score=p.reliability,
-                cost_per_1k=p_cost,
+                cost_per_1k=float(p.input_cost_per_1k),
                 latency_ms=p_lat,
             ))
 
@@ -277,7 +306,14 @@ class RoutingEngine:
         winner_score = scored_candidates[0]
         winner_prof = ProfileManager.get(winner_score.model_id)
 
+        # Build fallback chain
         fallbacks = [(s.provider, s.model_id) for s in scored_candidates[1:3]]
+        if len(fallbacks) < 2:
+            for p in profiles:
+                if (p.provider, p.model_id) != (winner_score.provider, winner_score.model_id) and (p.provider, p.model_id) not in fallbacks:
+                    fallbacks.append((p.provider, p.model_id))
+                if len(fallbacks) >= 2:
+                    break
 
         reason = (
             f"Selected {winner_prof.display_name if winner_prof else winner_score.model_id} "

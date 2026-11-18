@@ -44,34 +44,38 @@ CODING_PATTERNS = [
     r"```[a-zA-Z]*",
     r"\b(def |function |class |return |import |const |let |var |fn |func |pub |SELECT |FROM |WHERE |GROUP BY)\b",
     r"\b(debug|refactor|compile|runtime error|syntax error|algorithm|unit test|regex|sql query|api endpoint|dockerfile)\b",
+    r"\b(python|javascript|typescript|golang|rust|java|c\+\+|sql|bash|html|css|json|yaml|script|code|one-liner|fibonacci|memoization)\b",
+    r"\b(system design|architecture|distributed system|consensus|protocol|data structure|concurrency)\b",
     r"(\{|\}|\(\)|=>|===|!==|;|\[\])",
 ]
 
 REASONING_PATTERNS = [
     r"\b(prove|derive|solve for|step-by-step|deduce|infer|calculate|probability|bayes|logic puzzle|contradiction)\b",
     r"\b(why does|analyze the trade-off|evaluate the consequence|what would happen if|root cause)\b",
-    r"\b(\d+\s*[\+\-\*\/\^]\s*\d+|equation|theorem|hypothesis|p-value|matrix|differential)\b",
+    r"\b(how many|each brother|logical proof|multiplied by|divided by|equation|theorem|hypothesis|p-value|matrix|differential)\b",
+    r"\b(\d+\s*[\+\-\*\/\^]\s*\d+)\b",
 ]
 
 WRITING_PATTERNS = [
-    r"\b(draft|write a (story|essay|poem|email|speech|blog post|article)|summarize|paraphrase|rewrite)\b",
+    r"\b(draft|write a (story|essay|poem|email|speech|blog post|article)|essay|summarize|paraphrase|rewrite)\b",
     r"\b(tone of voice|compelling|creative writing|metaphor|rhyme|dialogue|in the style of)\b",
-    r"\b(headline|copywriting|bullet points|executive summary|press release)\b",
+    r"\b(headline|copywriting|bullet points|executive summary|press release|blog post|announcement)\b",
 ]
 
 COMPLEXITY_HIGH_INDICATORS = [
     r"\b(lock-free|concurrency|distributed system|consensus|byzantine|fault tolerance|protocol|inductive proof|formal proof|microservices|memory leak|deadlock|np-hard|dynamic programming)\b",
     r"\b(asymptot|o\(n\^|formal verification|security audit|vulnerability analysis|zero-day|cryptographic|safety and liveness)\b",
-    r"\b(comprehensive|production-grade|end-to-end|in-depth analysis|multi-tier|architectural design|distributed consensus)\b",
+    r"\b(comprehensive|production-grade|end-to-end|in-depth analysis|multi-tier|architectural design|distributed consensus|ast|compiler|profiler)\b",
 ]
 
 COMPLEXITY_MODERATE_INDICATORS = [
-    r"\b(async |await |fastapi|sqlalchemy|postgresql|docker|database|refactor|optimize|class |unit test|algorithm)\b",
-    r"\b(step-by-step|logical proof|puzzle|contradiction|derive|calculate probability)\b",
+    r"\b(async |await |fastapi|sqlalchemy|postgresql|docker|database|refactor|optimize|class |unit test|algorithm|memoization|type hints|fibonacci)\b",
+    r"\b(script|api|scrape|parse|regex|sql|query|endpoint|pipeline|transform|decorator|generator|interface|recursion|implementation)\b",
+    r"\b(compare|contrast|essay|philosophy|critique|evaluate|analyze|step-by-step|logical proof|puzzle|contradiction|derive|calculate probability|blog post|announcement|explain in detail|trade-offs)\b",
 ]
 
 CONSTRAINT_PATTERNS = [
-    r"\b(must (be|include|not|have)|strictly|do not include|limit to|maximum of|json format only|valid yaml)\b",
+    r"\b(must (be|include|not|have)|strictly|do not include|limit to|maximum of|json format|valid yaml|format as json|return only)\b",
     r"\b(without using|format as|schema:)\b",
 ]
 
