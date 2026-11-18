@@ -254,7 +254,7 @@ export default function PlaygroundView() {
 
           {/* Telemetry Strip */}
           {response && (
-            <div className="grid grid-cols-4 gap-px bg-app-border border border-app-border rounded-lg overflow-hidden font-mono text-center">
+            <div className="grid grid-cols-5 gap-px bg-app-border border border-app-border rounded-lg overflow-hidden font-mono text-center">
               <div className="bg-app-panel p-2">
                 <div className="text-[10px] text-ink-muted">RESOLVED MODEL</div>
                 <div className="text-xs font-bold text-ink-primary truncate mt-0.5">
@@ -279,6 +279,12 @@ export default function PlaygroundView() {
                   response.cache_status === 'HIT' ? 'text-metric-emerald' : 'text-ink-secondary'
                 }`}>
                   {response.cache_status || 'MISS'}
+                </div>
+              </div>
+              <div className="bg-app-panel p-2">
+                <div className="text-[10px] text-ink-muted">COST USD</div>
+                <div className="text-xs font-bold text-metric-emerald mt-0.5">
+                  {response.cost_usd != null ? `$${Number(response.cost_usd).toFixed(6)}` : '—'}
                 </div>
               </div>
             </div>
@@ -351,7 +357,7 @@ export default function PlaygroundView() {
               </div>
 
               {/* Justification Text */}
-              <div className="p-2.5 bg-app-bg border border-app-border rounded text-[11px] text-ink-secondary leading-relaxed">
+              <div className="p-2.5 bg-app-bg border border-app-border rounded text-xs text-ink-secondary leading-relaxed border-l-4 border-metric-blue pl-3">
                 {decision.reason}
               </div>
 
@@ -371,6 +377,7 @@ export default function PlaygroundView() {
                           <th className="pb-1.5 text-center">Quality (Q)</th>
                           <th className="pb-1.5 text-center">Cost Score</th>
                           <th className="pb-1.5 text-center">Latency</th>
+                          <th className="pb-1.5 text-center">$/1K</th>
                           <th className="pb-1.5 text-right font-bold">Composite Utility</th>
                         </tr>
                       </thead>
@@ -398,6 +405,9 @@ export default function PlaygroundView() {
                             </td>
                             <td className="py-1.5 text-center text-metric-amber">
                               {c.latency_ms} ms
+                            </td>
+                            <td className="py-1.5 text-center text-ink-secondary font-mono">
+                              {c.cost_per_1k != null ? `$${Number(c.cost_per_1k).toFixed(5)}` : '—'}
                             </td>
                             <td className="py-1.5 text-right font-bold text-metric-emerald font-mono">
                               {c.overall_score}

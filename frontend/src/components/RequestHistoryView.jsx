@@ -83,7 +83,17 @@ export default function RequestHistoryView() {
               </tr>
             </thead>
             <tbody className="divide-y divide-app-border/40">
-              {logs.map((log, idx) => (
+              {logs.length === 0 ? (
+                <tr>
+                  <td colSpan={9}>
+                    <div className="flex flex-col items-center justify-center py-16 text-ink-muted text-xs">
+                      <FileText className="w-8 h-8 mb-3 text-ink-faint" />
+                      <p>No request logs yet. Use the Playground to generate your first request.</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+              logs.map((log, idx) => (
                 <tr key={idx} className="hover:bg-app-subtle/25 transition-colors">
                   <td className="py-2.5 px-3">
                     <button
@@ -154,7 +164,8 @@ export default function RequestHistoryView() {
                     </button>
                   </td>
                 </tr>
-              ))}
+              ))
+              )}
             </tbody>
           </table>
         </div>
@@ -162,7 +173,7 @@ export default function RequestHistoryView() {
 
       {/* Step-by-Step Distributed Trace Inspector Modal */}
       {selectedTrace && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4">
           <div className="bg-app-panel border border-app-border rounded-lg w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden font-mono">
             {/* Header */}
             <div className="p-4 border-b border-app-border flex items-center justify-between">

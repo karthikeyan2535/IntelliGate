@@ -253,7 +253,7 @@ class GatewayPipeline:
                 return await self._handle_streaming(ctx, candidates, processed_messages)
             else:
                 # Non-streaming flow: execute provider with failover
-                return await self._handle_non_streaming(ctx, candidates, processed_messages)
+                return await self._handle_non_streaming(ctx, candidates, processed_messages, db_session=db_session)
 
         except HTTPException:
             if ctx.budget_reserved:
@@ -270,6 +270,7 @@ class GatewayPipeline:
         ctx: PipelineContext,
         candidates: list[RouteCandidate],
         messages: list[ProviderMessage],
+        db_session: Optional[Any] = None,
     ) -> JSONResponse:
         t0 = time.perf_counter()
         last_error: Exception | None = None
@@ -469,10 +470,60 @@ class GatewayPipeline:
             resp_headers["X-IntelliGate-Complexity"] = str(ctx.routing_decision.complexity)
             resp_headers["X-IntelliGate-Routing-Mode"] = str(ctx.routing_decision.mode)
 
+        # 14. Persist request log to DB (non-blocking, never breaks response)
+        if db_session is not None:
+            total_latency_ms = int(sum(ctx.stage_timings.values()))
+            await self._persist_request_log(
+                db=db_session,
+                ctx=ctx,
+                chosen_candidate=chosen_candidate,
+                usage_obj=usage_obj,
+                cost_breakdown=cost_breakdown,
+                latency_ms=total_latency_ms,
+            )
+
         return JSONResponse(
             content=resp_dict,
             headers=resp_headers,
         )
+
+    async def _persist_request_log(
+        self,
+        db: Any,
+        ctx: PipelineContext,
+        chosen_candidate: "RouteCandidate",
+        usage_obj: "TokenUsage",
+        cost_breakdown: Any,
+        latency_ms: int,
+    ) -> None:
+        """Persist a RequestLog record to DB. Never raises — log failures must not break the response."""
+        try:
+            from app.database.models import RequestLog, RequestStatus
+            metadata: dict = {}
+            if ctx.routing_decision:
+                metadata = {
+                    "task_category": ctx.routing_decision.task_category,
+                    "complexity": ctx.routing_decision.complexity,
+                    "routing_mode": ctx.routing_decision.mode,
+                    "provider": chosen_candidate.provider_name,
+                }
+            log = RequestLog(
+                request_id=ctx.request_id,
+                model_requested=ctx.raw_request.model,
+                model_used=chosen_candidate.model_name,
+                status=RequestStatus.SUCCESS,
+                prompt_tokens=usage_obj.prompt_tokens,
+                completion_tokens=usage_obj.completion_tokens,
+                total_tokens=usage_obj.total_tokens,
+                cost_usd=Decimal(str(cost_breakdown.total_cost_usd)),
+                latency_ms=latency_ms,
+                cached=ctx.cache_hit,
+                request_metadata=metadata,
+            )
+            db.add(log)
+            await db.commit()
+        except Exception as exc:
+            logger.warning("Failed to persist request log", error=str(exc))
 
     async def _handle_streaming(
         self,

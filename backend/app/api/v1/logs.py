@@ -14,9 +14,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.auth import get_current_user
 from app.database.base import get_db
-from app.database.models import RequestLog, User
+from app.database.models import RequestLog
 
 logger = structlog.get_logger(__name__)
 
@@ -30,7 +29,6 @@ async def list_request_logs(
     model: Optional[str] = Query(None),
     cache_hit: Optional[bool] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ) -> List[Dict[str, Any]]:
     """
     Returns recent request logs with execution metadata for dashboard log viewer.
@@ -45,13 +43,14 @@ async def list_request_logs(
                 {
                     "id": str(l.id),
                     "request_id": l.request_id,
-                    "model_name": l.model_name,
+                    "model_name": l.model_used or l.model_requested or "auto",
+                    "provider_name": (l.request_metadata or {}).get("provider", "groq" if "llama" in (l.model_used or "") else "openai"),
                     "status": l.status.value if hasattr(l.status, "value") else str(l.status),
-                    "duration_ms": l.duration_ms,
-                    "cache_hit": l.cache_hit,
-                    "pii_detected": l.pii_detected,
-                    "retry_count": l.retry_count,
-                    "fallback_used": l.fallback_used,
+                    "duration_ms": l.latency_ms or 0,
+                    "cache_hit": l.cached,
+                    "pii_detected": False,
+                    "retry_count": 0,
+                    "fallback_used": False,
                     "created_at": l.created_at.isoformat() if l.created_at else None,
                 }
                 for l in logs
@@ -122,7 +121,6 @@ async def list_request_logs(
 async def inspect_request(
     request_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
     Returns step-by-step stage execution details, timing breakdown,

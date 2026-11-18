@@ -413,3 +413,4 @@ The entire codebase is verified by an extensive automated test suite covering un
 ---
 
 *IntelliGate Architecture Documentation — Maintained in repository root: [INTELLIGATE_DEEP_DIVE.md](file:///e:/ai_pro/intelligate/INTELLIGATE_DEEP_DIVE.md).*
+

@@ -104,6 +104,13 @@ export default function OverviewView({ onNavigate }) {
         ))}
       </div>
 
+      {/* Seeded data banner */}
+      {overview?.is_seeded_data === true && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-700 text-xs px-4 py-2 rounded flex items-center gap-2">
+          ⚡ Showing sample data — make requests via the Playground to populate live analytics
+        </div>
+      )}
+
       {/* Main Grid: Timeseries vs Task Classification */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Request Throughput & Spend Area Chart */}
@@ -143,8 +150,8 @@ export default function OverviewView({ onNavigate }) {
                 <YAxis stroke="#556070" fontSize={10} fontMono={true} tickLine={false} axisLine={false} />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: '#0d1117',
-                    borderColor: '#1c2333',
+                    backgroundColor: '#ffffff',
+                    borderColor: '#e2e8f0',
                     borderRadius: '4px',
                     fontSize: '11px',
                     fontFamily: 'JetBrains Mono',
@@ -230,8 +237,8 @@ export default function OverviewView({ onNavigate }) {
                 <YAxis type="category" dataKey="model" stroke="#556070" fontSize={10} fontMono={true} width={110} />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: '#0d1117',
-                    borderColor: '#1c2333',
+                    backgroundColor: '#ffffff',
+                    borderColor: '#e2e8f0',
                     borderRadius: '4px',
                     fontSize: '11px',
                     fontFamily: 'JetBrains Mono',

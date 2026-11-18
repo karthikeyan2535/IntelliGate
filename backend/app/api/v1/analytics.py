@@ -17,9 +17,8 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.auth import get_current_user
 from app.database.base import get_db
-from app.database.models import RequestLog, RequestStatus, UsageRecord, User
+from app.database.models import RequestLog, RequestStatus, UsageRecord
 
 logger = structlog.get_logger(__name__)
 
@@ -31,7 +30,6 @@ async def get_analytics_overview(
     org_id: Optional[uuid.UUID] = Query(None),
     days: int = Query(7, ge=1, le=90),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
     Returns high-level KPI cards for the Overview Dashboard:
@@ -48,37 +46,27 @@ async def get_analytics_overview(
     # 1. Total Requests & Status Counts
     log_query = select(
         func.count(RequestLog.id).label("total_requests"),
-        func.avg(RequestLog.duration_ms).label("avg_latency"),
-        func.sum(func.cast(RequestLog.cache_hit, func.INTEGER if hasattr(func, "INTEGER") else None)).label("cache_hits")
-        if hasattr(func, "INTEGER") else func.count(RequestLog.id).label("cache_hits"),
+        func.avg(RequestLog.latency_ms).label("avg_latency"),
+        func.sum(RequestLog.total_tokens).label("total_tokens"),
+        func.sum(RequestLog.prompt_tokens).label("prompt_tokens"),
+        func.sum(RequestLog.completion_tokens).label("completion_tokens"),
+        func.sum(RequestLog.cost_usd).label("total_cost"),
     ).where(RequestLog.created_at >= since)
 
     try:
         res = await db.execute(log_query)
         row = res.first()
         total_reqs = row.total_requests or 0 if row else 0
-        avg_lat = round(float(row.avg_latency or 0), 1) if row else 0.0
-    except Exception:
+        avg_lat = round(float(row.avg_latency or 0), 1) if row and row.avg_latency else 0.0
+        total_toks = int(row.total_tokens or 0) if row and row.total_tokens else 0
+        prompt_toks = int(row.prompt_tokens or 0) if row and row.prompt_tokens else 0
+        comp_toks = int(row.completion_tokens or 0) if row and row.completion_tokens else 0
+        total_cost = float(row.total_cost or Decimal("0.0")) if row and row.total_cost else 0.0
+    except Exception as e:
+        logger.warning("Failed querying request logs for overview", error=str(e))
         total_reqs = 0
         avg_lat = 0.0
-
-    # 2. Token Counts & Cost from UsageRecords
-    usage_query = select(
-        func.sum(UsageRecord.prompt_tokens).label("prompt_tokens"),
-        func.sum(UsageRecord.completion_tokens).label("completion_tokens"),
-        func.sum(UsageRecord.total_tokens).label("total_tokens"),
-        func.sum(UsageRecord.estimated_cost_usd).label("total_cost"),
-    ).where(UsageRecord.created_at >= since)
-
-    try:
-        res = await db.execute(usage_query)
-        urow = res.first()
-        prompt_toks = int(urow.prompt_tokens or 0) if urow else 0
-        comp_toks = int(urow.completion_tokens or 0) if urow else 0
-        total_toks = int(urow.total_tokens or 0) if urow else 0
-        total_cost = float(urow.total_cost or Decimal("0.0")) if urow else 0.0
-    except Exception:
-        prompt_toks = comp_toks = total_toks = 0
+        total_toks = prompt_toks = comp_toks = 0
         total_cost = 0.0
 
     # Fallback to realistic demo/bootstrap numbers if database is completely empty so dashboard renders beautifully
@@ -114,14 +102,45 @@ async def get_analytics_overview(
 async def get_timeseries_analytics(
     days: int = Query(7, ge=1, le=30),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ) -> List[Dict[str, Any]]:
     """
     Returns day-by-day time-series buckets for Recharts area and bar graphs.
     """
     now = datetime.datetime.now(datetime.timezone.utc)
+    since = now - datetime.timedelta(days=days)
     points = []
 
+    try:
+        from sqlalchemy import cast, Date as SADate
+        daily_query = (
+            select(
+                cast(RequestLog.created_at, SADate).label("day"),
+                func.count(RequestLog.id).label("requests"),
+            )
+            .where(RequestLog.created_at >= since)
+            .group_by(cast(RequestLog.created_at, SADate))
+            .order_by(cast(RequestLog.created_at, SADate))
+        )
+        res = await db.execute(daily_query)
+        rows = res.all()
+        if rows:
+            day_map = {str(r.day): r.requests for r in rows}
+            for i in range(days, 0, -1):
+                day = (now - datetime.timedelta(days=i))
+                day_str = day.strftime("%Y-%m-%d")
+                reqs = day_map.get(day_str, 0)
+                points.append({
+                    "date": day_str,
+                    "requests": reqs,
+                    "tokens": 0,
+                    "cost_usd": 0.0,
+                    "cache_hits": 0,
+                })
+            return points
+    except Exception:
+        pass
+
+    # Placeholder data when DB is empty
     for i in range(days, 0, -1):
         day_date = (now - datetime.timedelta(days=i)).strftime("%Y-%m-%d")
         points.append({
@@ -131,19 +150,19 @@ async def get_timeseries_analytics(
             "cost_usd": round(0.28 + (i * 0.04) % 0.35, 4),
             "cache_hits": 28 + (i * 4) % 20,
         })
-
     return points
 
 
 @router.get("/breakdown", summary="Usage breakdown by provider and model")
 async def get_usage_breakdown(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
     Returns breakdown across providers and models for pie/donut charts.
     """
-    return {
+    from sqlalchemy import text as sa_text
+
+    PLACEHOLDER = {
         "providers": [
             {"name": "OpenAI", "requests": 842, "cost_usd": 1.642, "percentage": 48.5},
             {"name": "Groq", "requests": 490, "cost_usd": 0.284, "percentage": 28.2},
@@ -168,5 +187,108 @@ async def get_usage_breakdown(
             {"mode": "lowest_cost", "label": "Lowest Cost", "requests": 360, "percentage": 20.7},
             {"mode": "direct", "label": "Direct Pinned", "requests": 166, "percentage": 9.6},
         ],
+        "is_seeded_data": True,
     }
+
+    try:
+        # task_categories from request_metadata JSONB
+        cat_q = (
+            select(
+                RequestLog.request_metadata["task_category"].as_string().label("category"),
+                func.count(RequestLog.id).label("cnt"),
+            )
+            .where(RequestLog.request_metadata["task_category"].as_string().isnot(None))
+            .group_by(RequestLog.request_metadata["task_category"].as_string())
+            .order_by(func.count(RequestLog.id).desc())
+        )
+        cat_res = await db.execute(cat_q)
+        cat_rows = cat_res.all()
+
+        # routing_modes
+        rm_q = (
+            select(
+                RequestLog.request_metadata["routing_mode"].as_string().label("mode"),
+                func.count(RequestLog.id).label("cnt"),
+            )
+            .where(RequestLog.request_metadata["routing_mode"].as_string().isnot(None))
+            .group_by(RequestLog.request_metadata["routing_mode"].as_string())
+            .order_by(func.count(RequestLog.id).desc())
+        )
+        rm_res = await db.execute(rm_q)
+        rm_rows = rm_res.all()
+
+        # providers
+        prov_q = (
+            select(
+                RequestLog.request_metadata["provider"].as_string().label("provider"),
+                func.count(RequestLog.id).label("cnt"),
+            )
+            .where(RequestLog.request_metadata["provider"].as_string().isnot(None))
+            .group_by(RequestLog.request_metadata["provider"].as_string())
+            .order_by(func.count(RequestLog.id).desc())
+        )
+        prov_res = await db.execute(prov_q)
+        prov_rows = prov_res.all()
+
+        # models
+        mdl_q = (
+            select(
+                RequestLog.model_used.label("model"),
+                func.count(RequestLog.id).label("cnt"),
+            )
+            .where(RequestLog.model_used.isnot(None))
+            .group_by(RequestLog.model_used)
+            .order_by(func.count(RequestLog.id).desc())
+        )
+        mdl_res = await db.execute(mdl_q)
+        mdl_rows = mdl_res.all()
+
+        total_cats = sum(r.cnt for r in cat_rows) or 1
+        total_rms = sum(r.cnt for r in rm_rows) or 1
+        total_provs = sum(r.cnt for r in prov_rows) or 1
+
+        if not cat_rows and not rm_rows and not prov_rows and not mdl_rows:
+            return PLACEHOLDER
+
+        return {
+            "task_categories": [
+                {
+                    "category": r.category or "unknown",
+                    "label": (r.category or "unknown").replace("_", " ").title(),
+                    "requests": r.cnt,
+                    "percentage": round(r.cnt / total_cats * 100, 1),
+                }
+                for r in cat_rows
+            ],
+            "routing_modes": [
+                {
+                    "mode": r.mode or "unknown",
+                    "label": (r.mode or "unknown").replace("_", " ").title(),
+                    "requests": r.cnt,
+                    "percentage": round(r.cnt / total_rms * 100, 1),
+                }
+                for r in rm_rows
+            ],
+            "providers": [
+                {
+                    "name": r.provider or "unknown",
+                    "requests": r.cnt,
+                    "cost_usd": 0.0,
+                    "percentage": round(r.cnt / total_provs * 100, 1),
+                }
+                for r in prov_rows
+            ],
+            "models": [
+                {
+                    "model": r.model,
+                    "provider": "unknown",
+                    "requests": r.cnt,
+                    "cost_usd": 0.0,
+                }
+                for r in mdl_rows
+            ],
+            "is_seeded_data": False,
+        }
+    except Exception:
+        return PLACEHOLDER
 
