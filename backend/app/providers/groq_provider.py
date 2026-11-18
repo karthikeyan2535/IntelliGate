@@ -53,10 +53,18 @@ class GroqProvider(BaseProvider):
             formatted.append({"role": msg.role, "content": msg.content})
         return formatted
 
+    def _resolve_model(self, model: str) -> str:
+        """Resolves model name, mapping tier-restricted models to active Groq models."""
+        lower = model.lower()
+        if "llama" in lower or "mixtral" in lower:
+            return "openai/gpt-oss-120b"
+        return model
+
     async def chat_completion(self, request: ProviderRequest) -> ProviderResponse:
         url = f"{self.base_url}/chat/completions"
+        target_model = self._resolve_model(request.model)
         payload: dict[str, Any] = {
-            "model": request.model,
+            "model": target_model,
             "messages": self._format_messages(request.messages),
             "stream": False,
         }
@@ -104,8 +112,9 @@ class GroqProvider(BaseProvider):
 
     async def stream_completion(self, request: ProviderRequest) -> AsyncIterator[StreamChunk]:
         url = f"{self.base_url}/chat/completions"
+        target_model = self._resolve_model(request.model)
         payload = {
-            "model": request.model,
+            "model": target_model,
             "messages": self._format_messages(request.messages),
             "stream": True,
         }

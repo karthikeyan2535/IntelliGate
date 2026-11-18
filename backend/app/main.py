@@ -48,6 +48,8 @@ async def lifespan(app: FastAPI):
             "environment": settings.ENVIRONMENT,
         }
     )
+    from app.providers.registry import provider_registry
+    provider_registry.ensure_initialized()
     logger.info("IntelliGate starting", version=settings.APP_VERSION)
 
     yield

@@ -73,25 +73,36 @@ class ProviderRegistry:
 
     def _initialize_from_env(self) -> None:
         """Autodiscover providers from standard environment variables."""
+        try:
+            from pathlib import Path
+            from dotenv import load_dotenv
+            load_dotenv()
+            # Also check workspace root and backend folder
+            for p in [Path(__file__).resolve().parents[2] / ".env", Path(__file__).resolve().parents[3] / ".env"]:
+                if p.exists():
+                    load_dotenv(p)
+        except Exception:
+            pass
+
         # OpenAI
         openai_key = os.getenv("OPENAI_API_KEY")
-        if openai_key:
+        if openai_key and len(openai_key.strip()) > 5:
             from app.providers.openai_provider import OpenAIProvider
-            self._providers["openai"] = OpenAIProvider(api_key=openai_key)
+            self._providers["openai"] = OpenAIProvider(api_key=openai_key.strip())
             logger.info("Initialized OpenAI provider from environment")
 
         # Gemini
         gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-        if gemini_key:
+        if gemini_key and len(gemini_key.strip()) > 5:
             from app.providers.gemini_provider import GeminiProvider
-            self._providers["gemini"] = GeminiProvider(api_key=gemini_key)
+            self._providers["gemini"] = GeminiProvider(api_key=gemini_key.strip())
             logger.info("Initialized Gemini provider from environment")
 
         # Groq
         groq_key = os.getenv("GROQ_API_KEY")
-        if groq_key:
+        if groq_key and len(groq_key.strip()) > 5:
             from app.providers.groq_provider import GroqProvider
-            self._providers["groq"] = GroqProvider(api_key=groq_key)
+            self._providers["groq"] = GroqProvider(api_key=groq_key.strip())
             logger.info("Initialized Groq provider from environment")
 
 

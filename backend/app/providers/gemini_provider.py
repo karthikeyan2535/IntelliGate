@@ -184,10 +184,11 @@ class GeminiProvider(BaseProvider):
         return payload
 
     def _model_url_part(self, model: str) -> str:
-        """Return model name, adding gemini- prefix if needed."""
-        if not model.startswith("models/"):
-            return model
-        return model  # already prefixed
+        """Return model name, resolving legacy/deprecated versions to active models."""
+        clean = model.replace("models/", "")
+        if "1.5" in clean or "2.5-flash-lite" in clean:
+            return "gemini-3.5-flash-lite"
+        return clean
 
     # ------------------------------------------------------------------
     # Non-streaming
