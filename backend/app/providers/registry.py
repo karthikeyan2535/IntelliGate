@@ -2,44 +2,32 @@
 Provider registry for IntelliGate.
 
 Maintains a singleton map of provider_id → BaseProvider instances.
-Providers are registered at startup and can be invalidated when credentials change.
+Automatically discovers credentials from environment variables.
 """
 from __future__ import annotations
 
+import os
 import threading
-from typing import TYPE_CHECKING
+from typing import Optional
 
 import structlog
 
 from app.providers.base import BaseProvider, ProviderError
 
-if TYPE_CHECKING:
-    pass
-
 logger = structlog.get_logger(__name__)
 
 
 class ProviderRegistry:
-    """
-    Thread-safe registry that maps provider_id → BaseProvider instance.
-
-    Provider IDs are arbitrary strings (e.g. a DB UUID, "openai-prod",
-    "anthropic-eu").  The same provider type can be registered multiple
-    times with different IDs (and different credentials).
-    """
+    """Thread-safe registry that maps provider_id → BaseProvider instance."""
 
     def __init__(self) -> None:
         self._providers: dict[str, BaseProvider] = {}
         self._lock = threading.Lock()
-
-    # ------------------------------------------------------------------
-    # Registration
-    # ------------------------------------------------------------------
+        self._initialized = False
 
     def register(self, provider_id: str, provider: BaseProvider) -> None:
-        """Register (or replace) a provider by ID."""
         with self._lock:
-            self._providers[provider_id] = provider
+            self._providers[provider_id.lower()] = provider
         logger.info(
             "provider_registry.registered",
             provider_id=provider_id,
@@ -47,60 +35,64 @@ class ProviderRegistry:
         )
 
     def unregister(self, provider_id: str) -> None:
-        """Remove a provider from the registry (e.g. when creds are deleted)."""
         with self._lock:
-            removed = self._providers.pop(provider_id, None)
-        if removed:
-            logger.info(
-                "provider_registry.unregistered",
-                provider_id=provider_id,
-                provider_type=removed.provider_type,
-            )
+            self._providers.pop(provider_id.lower(), None)
 
     def invalidate(self, provider_id: str) -> None:
-        """Alias for unregister — signals that cached credentials are stale."""
         self.unregister(provider_id)
 
-    # ------------------------------------------------------------------
-    # Lookup
-    # ------------------------------------------------------------------
-
     def get(self, provider_id: str) -> BaseProvider:
-        """Return the provider for the given ID or raise ProviderError."""
-        with self._lock:
-            provider = self._providers.get(provider_id)
-        if provider is None:
+        prov = self.get_or_none(provider_id)
+        if prov is None:
             raise ProviderError(
                 f"Provider '{provider_id}' not found in registry",
                 status_code=503,
                 error_code="provider_not_found",
                 retryable=False,
             )
-        return provider
+        return prov
 
     def get_or_none(self, provider_id: str) -> BaseProvider | None:
-        """Return the provider or None if not registered."""
+        self.ensure_initialized()
         with self._lock:
-            return self._providers.get(provider_id)
+            return self._providers.get(provider_id.lower())
 
     def all_providers(self) -> dict[str, BaseProvider]:
-        """Return a snapshot of all registered providers."""
+        self.ensure_initialized()
         with self._lock:
             return dict(self._providers)
 
-    def registered_ids(self) -> list[str]:
-        """Return all registered provider IDs."""
+    def ensure_initialized(self) -> None:
+        if self._initialized:
+            return
         with self._lock:
-            return list(self._providers.keys())
+            if self._initialized:
+                return
+            self._initialize_from_env()
+            self._initialized = True
 
-    def __len__(self) -> int:
-        with self._lock:
-            return len(self._providers)
+    def _initialize_from_env(self) -> None:
+        """Autodiscover providers from standard environment variables."""
+        # OpenAI
+        openai_key = os.getenv("OPENAI_API_KEY")
+        if openai_key:
+            from app.providers.openai_provider import OpenAIProvider
+            self._providers["openai"] = OpenAIProvider(api_key=openai_key)
+            logger.info("Initialized OpenAI provider from environment")
 
-    def __contains__(self, provider_id: str) -> bool:
-        with self._lock:
-            return provider_id in self._providers
+        # Gemini
+        gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        if gemini_key:
+            from app.providers.gemini_provider import GeminiProvider
+            self._providers["gemini"] = GeminiProvider(api_key=gemini_key)
+            logger.info("Initialized Gemini provider from environment")
+
+        # Groq
+        groq_key = os.getenv("GROQ_API_KEY")
+        if groq_key:
+            from app.providers.groq_provider import GroqProvider
+            self._providers["groq"] = GroqProvider(api_key=groq_key)
+            logger.info("Initialized Groq provider from environment")
 
 
-# Global singleton — import this in startup code to register providers
 provider_registry = ProviderRegistry()

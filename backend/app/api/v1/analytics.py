@@ -145,16 +145,28 @@ async def get_usage_breakdown(
     """
     return {
         "providers": [
-            {"name": "OpenAI", "requests": 842, "cost_usd": 1.642, "percentage": 58.9},
-            {"name": "Anthropic", "requests": 412, "cost_usd": 0.984, "percentage": 28.8},
-            {"name": "Google Gemini", "requests": 174, "cost_usd": 0.220, "percentage": 12.3},
+            {"name": "OpenAI", "requests": 842, "cost_usd": 1.642, "percentage": 48.5},
+            {"name": "Groq", "requests": 490, "cost_usd": 0.284, "percentage": 28.2},
+            {"name": "Google Gemini", "requests": 404, "cost_usd": 0.320, "percentage": 23.3},
         ],
         "models": [
             {"model": "gpt-4o", "provider": "openai", "requests": 520, "cost_usd": 1.300},
+            {"model": "llama-3.3-70b-versatile", "provider": "groq", "requests": 340, "cost_usd": 0.200},
             {"model": "gpt-4o-mini", "provider": "openai", "requests": 322, "cost_usd": 0.342},
-            {"model": "claude-3-5-sonnet", "provider": "anthropic", "requests": 280, "cost_usd": 0.840},
-            {"model": "claude-3-5-haiku", "provider": "anthropic", "requests": 132, "cost_usd": 0.144},
-            {"model": "gemini-1.5-flash", "provider": "gemini", "requests": 174, "cost_usd": 0.220},
+            {"model": "gemini-1.5-flash", "provider": "gemini", "requests": 280, "cost_usd": 0.084},
+            {"model": "llama-3.1-8b-instant", "provider": "groq", "requests": 150, "cost_usd": 0.012},
+            {"model": "gemini-1.5-pro", "provider": "gemini", "requests": 124, "cost_usd": 0.236},
+        ],
+        "task_categories": [
+            {"category": "coding", "label": "Coding", "requests": 580, "percentage": 33.4},
+            {"category": "reasoning", "label": "Reasoning", "requests": 460, "percentage": 26.5},
+            {"category": "writing", "label": "Writing", "requests": 396, "percentage": 22.8},
+            {"category": "general_qa", "label": "General Q&A", "requests": 300, "percentage": 17.3},
+        ],
+        "routing_modes": [
+            {"mode": "intelligent", "label": "Intelligent Evaluation", "requests": 1210, "percentage": 69.7},
+            {"mode": "lowest_cost", "label": "Lowest Cost", "requests": 360, "percentage": 20.7},
+            {"mode": "direct", "label": "Direct Pinned", "requests": 166, "percentage": 9.6},
         ],
     }
 

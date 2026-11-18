@@ -70,6 +70,20 @@ PRICING_TABLE: dict[str, dict[str, dict[str, Decimal]]] = {
             "output": Decimal("0.00040"),
         },
     },
+    "groq": {
+        "llama-3.3-70b-versatile": {
+            "input": Decimal("0.00059"),
+            "output": Decimal("0.00079"),
+        },
+        "llama-3.1-8b-instant": {
+            "input": Decimal("0.00005"),
+            "output": Decimal("0.00008"),
+        },
+        "mixtral-8x7b-32768": {
+            "input": Decimal("0.00024"),
+            "output": Decimal("0.00024"),
+        },
+    },
     "mistral": {
         "mistral-large-latest": {
             "input": Decimal("0.0020"),

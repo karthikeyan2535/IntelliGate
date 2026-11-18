@@ -78,6 +78,7 @@ class PipelineContext:
     retry_count: int = 0
     fallback_used: bool = False
     pii_detected: bool = False
+    routing_decision: Any = None
 
 
 class GatewayPipeline:
@@ -224,11 +225,26 @@ class GatewayPipeline:
 
             # 7. Routing Strategy & Route Candidates
             t0 = time.perf_counter()
-            strategy = request.x_routing_policy or "priority"
-            candidates: list[RouteCandidate] = await self.routing_engine.select_route_candidates(
+            strategy = request.x_routing_policy or "intelligent"
+            user_prompts = [
+                str(m.content) for m in request.messages if m.content and isinstance(m.content, str)
+            ]
+            prompt_text = "\n".join(user_prompts)
+            decision = await self.routing_engine.route(
+                prompt=prompt_text,
                 requested_model=request.model,
-                strategy=strategy,
+                routing_mode=strategy,
             )
+            ctx.routing_decision = decision
+            candidates = [
+                RouteCandidate(
+                    provider_name=decision.selected_provider,
+                    model_name=decision.selected_model,
+                    priority=1,
+                )
+            ]
+            for idx, (p, m) in enumerate(decision.fallback_candidates):
+                candidates.append(RouteCandidate(provider_name=p, model_name=m, priority=idx + 2))
             ctx.stage_timings["routing"] = round((time.perf_counter() - t0) * 1000, 2)
 
             # 8. Execution with Retries & Fallback Chain
@@ -366,6 +382,30 @@ class GatewayPipeline:
             ),
         )
         resp_dict = api_response.model_dump()
+        if ctx.routing_decision:
+            resp_dict["routing_decision"] = {
+                "mode": ctx.routing_decision.mode,
+                "task_category": ctx.routing_decision.task_category,
+                "complexity": ctx.routing_decision.complexity,
+                "selected_model": ctx.routing_decision.selected_model,
+                "selected_provider": ctx.routing_decision.selected_provider,
+                "reason": ctx.routing_decision.reason,
+                "candidate_scores": [
+                    {
+                        "model_id": s.model_id,
+                        "provider": s.provider,
+                        "overall_score": s.overall_score,
+                        "quality_score": s.quality_score,
+                        "cost_score": s.cost_score,
+                        "latency_score": s.latency_score,
+                        "reliability_score": s.reliability_score,
+                        "cost_per_1k": s.cost_per_1k,
+                        "latency_ms": s.latency_ms,
+                        "rank": s.rank,
+                    }
+                    for s in ctx.routing_decision.candidate_scores
+                ],
+            }
         ctx.stage_timings["normalization"] = round((time.perf_counter() - t0) * 1000, 2)
 
         # 12. Record Metrics & Telemetry
@@ -400,15 +440,21 @@ class GatewayPipeline:
                 ttl_seconds=ctx.raw_request.x_cache_ttl or 3600,
             )
 
+        resp_headers = {
+            "X-IntelliGate-Request-ID": ctx.request_id,
+            "X-IntelliGate-Provider": chosen_candidate.provider_name,
+            "X-IntelliGate-Model": chosen_candidate.model_name,
+            "X-IntelliGate-Cost-USD": str(cost_breakdown.total_cost_usd),
+            "X-IntelliGate-Cache": "MISS",
+        }
+        if ctx.routing_decision:
+            resp_headers["X-IntelliGate-Task-Category"] = str(ctx.routing_decision.task_category)
+            resp_headers["X-IntelliGate-Complexity"] = str(ctx.routing_decision.complexity)
+            resp_headers["X-IntelliGate-Routing-Mode"] = str(ctx.routing_decision.mode)
+
         return JSONResponse(
             content=resp_dict,
-            headers={
-                "X-IntelliGate-Request-ID": ctx.request_id,
-                "X-IntelliGate-Provider": chosen_candidate.provider_name,
-                "X-IntelliGate-Model": chosen_candidate.model_name,
-                "X-IntelliGate-Cost-USD": str(cost_breakdown.total_cost_usd),
-                "X-IntelliGate-Cache": "MISS",
-            },
+            headers=resp_headers,
         )
 
     async def _handle_streaming(
@@ -524,11 +570,14 @@ class GatewayPipeline:
         from app.providers.openai_provider import OpenAIProvider
         from app.providers.anthropic_provider import AnthropicProvider
         from app.providers.gemini_provider import GeminiProvider
+        from app.providers.groq_provider import GroqProvider
 
         if provider_name == "anthropic":
             return AnthropicProvider(api_key="sk-ant-mock-key")
         elif provider_name == "gemini":
             return GeminiProvider(api_key="mock-gemini-key")
+        elif provider_name == "groq":
+            return GroqProvider(api_key="gsk-mock-key")
         else:
             return OpenAIProvider(api_key="sk-mock-key")
 

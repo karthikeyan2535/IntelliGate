@@ -1,101 +1,190 @@
-# IntelliGate — Multi-Provider LLM Gateway & AI Infrastructure Platform
+# IntelliGate — Evaluation-Driven Intelligent LLM Gateway
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![Next.js](https://img.shields.io/badge/Next.js-14.2+-black.svg?logo=next.js&logoColor=white)](https://nextjs.org)
+[![React](https://img.shields.io/badge/React-18-61DAFB.svg?logo=react&logoColor=black)](https://react.dev)
+[![Vite](https://img.shields.io/badge/Vite-6.0-646CFF.svg?logo=vite&logoColor=white)](https://vitejs.dev)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-blue.svg?logo=python&logoColor=white)](https://python.org)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-336791.svg?logo=postgresql&logoColor=white)](https://postgresql.org)
-[![Redis](https://img.shields.io/badge/Redis-7.4-DC382D.svg?logo=redis&logoColor=white)](https://redis.io)
-[![Tests](https://img.shields.io/badge/Tests-21%20Passed-success.svg)](https://pytest.org)
+[![Groq](https://img.shields.io/badge/Groq-LPU%20Inference-F05A28.svg)](https://groq.com)
+[![OpenAI](https://img.shields.io/badge/OpenAI-API-412991.svg?logo=openai&logoColor=white)](https://openai.com)
+[![Gemini](https://img.shields.io/badge/Google-Gemini%20API-4285F4.svg?logo=google&logoColor=white)](https://ai.google.dev)
+[![Tests](https://img.shields.io/badge/Tests-30%20Passed%20(100%25)-success.svg)](https://pytest.org)
 
-IntelliGate is a production-grade multi-provider LLM gateway and AI infrastructure platform. It provides a single, unified, OpenAI-compatible API to interact with OpenAI, Anthropic, Google Gemini, and local inference models with centralized model routing, distributed rate limiting, atomic cost governance, exact-match caching, PII redaction, and deep request tracing.
-
----
-
-## Key Features
-
-- **Unified OpenAI-Compatible API**: Seamless drop-in replacement (`/v1/chat/completions`, `/v1/models`). Works with any OpenAI SDK.
-- **21-Stage Ordered Gateway Pipeline**: Request validation, key auth, rate-limiting, budget reservation, PII redaction, cache lookup, routing, retry/fallback, normalization, and settlement.
-- **Provider Adapters**: Real adapters for **OpenAI**, **Anthropic**, **Google Gemini**, and generic **OpenAI-compatible** endpoints (Ollama, vLLM).
-- **Intelligent Routing Engine**: Six routing strategies: Direct, Priority-Based, Weighted, Lowest-Cost, Lowest-Latency, and Health-Aware.
-- **Reliability & Resilience**: Exponential backoff with decorrelated jitter, pre-commit streaming fallback, and 3-state Circuit Breakers (`CLOSED`, `OPEN`, `HALF_OPEN`).
-- **Atomic Budget Governance**: Zero concurrent overspending via Redis Lua reservations; exact financial accounting using Python `Decimal`.
-- **Distributed Rate Limiting**: Multi-tiered sliding window (Organization, Project, and Key RPM / TPM).
-- **Security & PII Guardrails**: Microsoft Presidio and high-precision regex recognizers with `disabled`, `detect_only`, `redact`, and `block` policies.
-- **Response Caching**: Deterministic SHA-256 fingerprinting with strict tenant isolation, achieving **307x speedup** on cache hits.
-- **Next.js Developer Dashboard**: 12 responsive pages covering Overview, Virtual Keys, Providers, Models, Routing, Budgets, Guardrails, Cache, Analytics, Logs, Request Inspector, and Settings.
-- **Stage-by-Stage Request Inspector**: Complete audit breakdown of execution timings per stage with zero prompt data leakage.
+**IntelliGate** is an evaluation-driven, production-ready Multi-Provider LLM Gateway designed for AI engineering environments. It provides a drop-in OpenAI-compatible API (`/v1/chat/completions`, `/v1/models`) that routes requests across **OpenAI**, **Google Gemini**, and **Groq**, driven by empirical benchmark performance rather than static rules.
 
 ---
 
-## Architecture Overview
+## 🌟 Core Technical Differentiator: Evaluation-Driven Intelligent Routing
+
+Most gateways route using naive hardcoded priority lists or round-robin balancing. IntelliGate treats routing as a **multi-objective optimization problem** calibrated by **live empirical benchmarks**:
 
 ```
-Client / OpenAI SDK
-         │
-         ▼
-[IntelliGate Data Plane]  ──►  1. Validation & Virtual Key Auth
-         │               ──►  2. Rate Limiting (Redis Sliding Window)
-         │               ──►  3. Atomic Budget Reservation (Redis Lua)
-         │               ──►  4. PII Detection & Redaction
-         │               ──►  5. Exact-Match Cache Lookup (Redis)
-         │               ──►  6. Routing Engine & Circuit Breaker
-         ▼
-[Upstream Providers]     ──►  OpenAI | Anthropic | Gemini | Local vLLM
-         │
-         ▼
-[Post-Processing]        ──►  7. Pre-commit Fallback Handling
-                         ──►  8. Response Normalization to OpenAI Format
-                         ──►  9. Decimal Cost Accounting & Budget Settlement
-                         ──► 10. Cache Population & Telemetry Logging
+Incoming Request
+      │
+      ▼
+[Task Classifier & Complexity Estimator]
+      ├── Categories: Coding | Reasoning | Writing | General Q&A
+      └── Complexity: Simple | Moderate | Complex
+      │
+      ▼
+[Capability Filter] ─── Check context window, circuit breaker state, availability
+      │
+      ▼
+[Multi-Objective Utility Engine]
+      └── Utility Score = (w_q · Quality) + (w_c · NormCost) + (w_l · NormLatency) + (w_r · Reliability)
+      │   * Dynamic weights adapt to task complexity (e.g. 60% quality weight for complex logic)
+      │
+      ▼
+[Optimal Model Execution + Fallback Chain]
+      └── Returns OpenAI-compatible response + Transparent Routing Explanation
 ```
 
 ---
 
-## Quick Start
+## 🚀 Key Features
 
-### 1. Using Docker Compose
+### 1. Unified Multi-Provider Abstraction
+- Standard drop-in OpenAI compatibility (`POST /v1/chat/completions`, `GET /v1/models`).
+- Connects directly to **OpenAI** (`gpt-4o`, `gpt-4o-mini`), **Google Gemini** (`gemini-1.5-pro`, `gemini-1.5-flash`), and **Groq** (`llama-3.3-70b-versatile`, `llama-3.1-8b-instant`).
+- Configured via clean environment variables (`OPENAI_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY`).
+- Streaming response support with pre-commit fallback guarantee.
 
+### 2. Intelligent Routing & Task Classification
+- **Syntax and Semantics Analysis**: Analyzes prompt AST patterns, code block indicators, multi-part constraints, and technical markers to classify tasks into `coding`, `reasoning`, `writing`, and `general_qa`.
+- **Constraint-Driven Complexity**: Distinguishes simple queries from deep algorithms independently of token count.
+- **Three Routing Modes**:
+  - `intelligent`: Optimizes quality-cost-latency Pareto frontier with dynamic complexity weights.
+  - `lowest_cost`: Directs traffic to the cheapest qualified token provider.
+  - `direct`: Pins execution to an explicitly requested model while maintaining gateway auditability.
+- **Transparent Decision Reasoning**: Every response includes an understandable explanation of why a model was chosen along with candidate rankings.
+
+### 3. Empirical Model Evaluation Framework
+- **Curated 24-Prompt Benchmark Suite**: Spans code synthesis, formal inductive proofs, long-form creative writing, and factual lookups.
+- **Deterministic & Pattern Verification**: Evaluates regex patterns, syntax validity, and expected key concepts without subjective hallucinations.
+- **Live Profile Calibration**: Benchmark runs immediately update in-memory profiles, feeding directly back into the live routing engine.
+
+### 4. High-Performance Reliability & Governance
+- **Exact-Match Response Caching**: Deterministic SHA-256 fingerprinting with tenant isolation, delivering **133x latency speedup** on cache hits.
+- **Resilient Circuit Breaker**: 3-state protection (`CLOSED`, `OPEN`, `HALF_OPEN`) preventing cascading failures.
+- **High-Precision Financial Accounting**: Exact token tracking and decimal cost calculations using Python `Decimal`.
+- **Zero-Data-Leakage PII Guardrails**: Pre-request scanning and automated redaction for emails, SSNs, API keys, and IP addresses.
+
+### 5. Modern Vite + React Dashboard
+- Built with **React 18 + Vite + Tailwind CSS + Recharts** (pure JavaScript).
+- **Overview**: Real-time KPI ribbons, request volume trends, task category distribution (PieChart), and model breakdown.
+- **LLM Playground**: Interactive prompt execution with instant response rendering and detailed **Routing Explanation Cards** showing candidate score breakdowns.
+- **Model Performance**: Empirical benchmark score matrix across all models with one-click live evaluation triggers.
+- **Request History**: Deep audit trail with execution trace modal showing pipeline timings per stage.
+
+---
+
+## 📊 Benchmark & Performance Profile
+
+Results from `scripts/benchmark.py` running automated load testing:
+
+| Metric | Measured Result |
+| :--- | :--- |
+| **Base Engine Latency (`/health`)** | **1.16 ms / req** |
+| **Full Pipeline Cold Latency** | ~2.0 s (Model invocation + PII + Routing) |
+| **Cached Request (Exact Match HIT)** | **14.97 ms (133.8x speedup)** |
+| **Concurrent Pipeline Throughput** | **53.1 req / sec** (50 concurrent requests, 100% success) |
+| **PII Multi-Entity Redaction Overhead**| **0.366 ms / payload** |
+| **Intelligent Routing Decision Latency**| **0.382 ms** (Classification: 0.173 ms) |
+
+---
+
+## 🛠️ Quick Start
+
+### 1. Prerequisites
+- Python 3.12 or 3.13
+- Node.js 18+ and npm
+- PostgreSQL and Redis (optional; gateway gracefully uses SQLite/in-memory fallback for local dev)
+
+### 2. Backend Setup
 ```bash
-cp .env.example .env
-docker compose up -d
-```
-- Dashboard: [http://localhost:3000](http://localhost:3000)
-- API Docs: [http://localhost:8000/docs](http://localhost:8000/docs)
-- Prometheus: [http://localhost:9090](http://localhost:9090)
-- Grafana: [http://localhost:3001](http://localhost:3001)
+# Clone the repository
+git clone https://github.com/karthikeyan2535/IntelliGate.git
+cd IntelliGate/backend
 
-### 2. Local Manual Startup
-
-```bash
-# Backend
-cd backend
+# Create virtual environment & install dependencies
 python -m venv venv
-venv\Scripts\activate
-pip install -e .
-uvicorn app.main:app --reload --port 8000
+source venv/bin/activate  # On Windows: .\venv\Scripts\activate
+pip install -r requirements.txt
 
-# Frontend
+# Configure environment keys
+cp ../.env.example ../.env
+# Edit .env with your OPENAI_API_KEY, GEMINI_API_KEY, and GROQ_API_KEY
+
+# Run test suite
+pytest tests -v
+
+# Start FastAPI gateway
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### 3. Frontend Setup
+```bash
 cd ../frontend
+
+# Install dependencies and start Vite dev server
 npm install
 npm run dev
+# Dashboard opens at http://localhost:3000
 ```
 
 ---
 
-## Verification & Testing
+## 📡 OpenAI-Compatible API Usage
 
-IntelliGate includes automated test suites covering unit, integration, and security checks:
+You can use the official `openai` Python SDK or `curl` directly:
 
-```powershell
-$env:PYTHONPATH = "E:\ai_pro\intelligate\backend"
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:8000/v1",
+    api_key="ig-playground-virtual-key-demo",
+)
+
+# Intelligent evaluation-driven routing
+response = client.chat.completions.create(
+    model="intelligent",  # or "gpt-4o", "lowest_cost", "llama-3.3-70b-versatile"
+    messages=[
+        {"role": "user", "content": "Write an async Python function to parse JSON with error handling."}
+    ],
+    temperature=0.7,
+)
+
+print("Assistant:", response.choices[0].message.content)
+```
+
+Response headers returned by IntelliGate:
+```http
+X-IntelliGate-Request-ID: req_a1b2c3d4e5f6
+X-IntelliGate-Provider: groq
+X-IntelliGate-Model: llama-3.3-70b-versatile
+X-IntelliGate-Task-Category: coding
+X-IntelliGate-Complexity: complex
+X-IntelliGate-Routing-Mode: intelligent
+X-IntelliGate-Cost-USD: 0.000182
+X-IntelliGate-Cache: MISS
+```
+
+---
+
+## 🧪 Test Suite
+
+Run the complete test suite verifying classification, multi-objective utility scoring, circuit breakers, caching, and financial accounting:
+
+```bash
 pytest backend/tests -v
 ```
 
-### Measured Benchmark Profile:
-```powershell
-python scripts/benchmark.py
+Output:
 ```
-- **Base Engine Latency**: `0.78 ms`
-- **Cached Latency**: `6.04 ms` (**307x faster**)
-- **Concurrency**: `183.4 req/sec` with **100% success rate** under load.
+============================= 30 passed in 4.33s ==============================
+```
 
+---
+
+## 📜 License
+MIT License. Built for production LLM operations and AI engineering intern portfolio presentation.

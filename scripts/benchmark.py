@@ -25,6 +25,7 @@ mock_p = MockLLMProvider()
 provider_registry.register("openai", mock_p)
 provider_registry.register("anthropic", mock_p)
 provider_registry.register("gemini", mock_p)
+provider_registry.register("groq", mock_p)
 
 
 async def run_benchmarks():
@@ -98,6 +99,24 @@ async def run_benchmarks():
             detector.scan_and_enforce(sample_pii_text, action=PIIPolicyAction.REDACT)
         pii_dur = ((time.perf_counter() - t0) / 200) * 1000
         print(f"[5] PII Multi-Entity Scan & Redact Overhead:  {pii_dur:.3f} ms / payload")
+
+        # ── Test 6: Intelligent Routing & Task Classification Latency ────────
+        from app.routing.classifier import TaskClassifier
+        from app.routing.engine import get_routing_engine
+        engine = get_routing_engine()
+        sample_prompt = "Write an async Rust function implementing Paxos distributed consensus with formal safety proof."
+        t0 = time.perf_counter()
+        for _ in range(100):
+            TaskClassifier.classify(sample_prompt)
+        classify_dur = ((time.perf_counter() - t0) / 100) * 1000
+
+        t0 = time.perf_counter()
+        routing_decision = await engine.route(prompt=sample_prompt, routing_mode="intelligent")
+        route_dur = (time.perf_counter() - t0) * 1000
+        print(f"[6] Intelligent Routing Latency:             {route_dur:.3f} ms (Classification: {classify_dur:.3f} ms)")
+        print(f"    • Category: {routing_decision.task_category} | Complexity: {routing_decision.complexity}")
+        print(f"    • Selected Model: {routing_decision.selected_model} ({routing_decision.selected_provider})")
+        print(f"    • Decision Reason: {routing_decision.reason[:75]}...")
 
     print("=" * 65)
     print("                  BENCHMARK COMPLETE - ALL PASSED             ")
