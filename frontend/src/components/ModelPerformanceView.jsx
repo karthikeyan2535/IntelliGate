@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Award, Zap, DollarSign, Clock, ShieldCheck, Play,
-  CheckCircle2, AlertCircle, RefreshCw, Database, FileText
+  Award, RefreshCw, Play, CheckCircle2, AlertCircle,
+  FileCode, Terminal, Search, ExternalLink, Layers
 } from 'lucide-react';
 import { fetchModelProfiles, runEvaluationSuite } from '../services/api';
 
@@ -11,6 +11,7 @@ export default function ModelPerformanceView() {
   const [evaluatingModel, setEvaluatingModel] = useState(null);
   const [evalResult, setEvalResult] = useState(null);
   const [evalError, setEvalError] = useState(null);
+  const [filterProvider, setFilterProvider] = useState('all');
 
   useEffect(() => {
     loadProfiles();
@@ -36,173 +37,193 @@ export default function ModelPerformanceView() {
     try {
       const result = await runEvaluationSuite(modelId, provider, 12);
       setEvalResult(result);
-      // Reload profiles to show dynamically updated scores
       await loadProfiles();
     } catch (err) {
-      console.error('Evaluation run failed', err);
-      setEvalError(err.message || 'Evaluation failed');
+      console.error('Evaluation run error', err);
+      setEvalError(err.message || 'Evaluation run failed');
     } finally {
       setEvaluatingModel(null);
     }
   }
 
+  const filtered = profiles.filter((p) => {
+    if (filterProvider === 'all') return true;
+    return p.provider?.toLowerCase() === filterProvider.toLowerCase();
+  });
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="space-y-5">
+      {/* Action Header & Provider Filter */}
+      <div className="bg-app-panel border border-app-border rounded-lg p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-mono">
         <div>
-          <h2 className="text-base font-semibold text-white flex items-center gap-2">
-            <Award className="w-5 h-5 text-indigo-400" />
-            Empirical Model Performance & Evaluation Matrix
+          <h2 className="text-xs font-mono font-semibold uppercase tracking-wider text-ink-primary flex items-center gap-2">
+            <Award className="w-4 h-4 text-metric-blue" />
+            Model Capability Registry & Empirical Benchmark Matrix
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Real benchmark scores across Coding, Reasoning, Writing, and QA. These live profiles directly calibrate the Intelligent Routing Engine's multi-objective utility functions.
+          <p className="text-[11px] text-ink-muted mt-0.5">
+            Empirical quality scores calibrated from deterministic unit tests & structured output assertions
           </p>
         </div>
-        <button
-          onClick={loadProfiles}
-          className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg flex items-center gap-2 border border-slate-700 transition-colors cursor-pointer self-start md:self-auto"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          Refresh Profiles
-        </button>
+
+        <div className="flex items-center gap-2">
+          {/* Provider Filter */}
+          <div className="flex items-center gap-1 bg-app-bg p-1 rounded border border-app-border text-[11px]">
+            {['all', 'openai', 'groq', 'gemini'].map((prov) => (
+              <button
+                key={prov}
+                onClick={() => setFilterProvider(prov)}
+                className={`px-2 py-0.5 rounded uppercase font-semibold transition-colors cursor-pointer ${
+                  filterProvider === prov
+                    ? 'bg-app-subtle text-ink-primary'
+                    : 'text-ink-muted hover:text-ink-secondary'
+                }`}
+              >
+                {prov}
+              </button>
+            ))}
+          </div>
+
+          <button
+            onClick={loadProfiles}
+            className="px-2.5 py-1 bg-app-subtle hover:bg-app-hover border border-app-border text-ink-secondary hover:text-ink-primary rounded flex items-center gap-1.5 transition-colors cursor-pointer"
+          >
+            <RefreshCw className="w-3 h-3" />
+            <span>Sync</span>
+          </button>
+        </div>
       </div>
 
-      {/* Live Evaluation Run Feedback Banner */}
+      {/* Live Run Banner */}
       {evaluatingModel && (
-        <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-xl p-4 flex items-center gap-3 text-xs text-indigo-300">
-          <Zap className="w-5 h-5 animate-spin text-indigo-400" />
-          <div>
-            <span className="font-semibold">Executing Benchmark Evaluation Suite:</span> Running 12 multi-category benchmark prompts through <strong className="font-mono">{evaluatingModel}</strong>...
-          </div>
+        <div className="bg-metric-blue/10 border border-metric-blue/30 rounded-lg p-3 text-xs font-mono text-metric-blue flex items-center gap-2.5">
+          <Terminal className="w-4 h-4 animate-spin flex-shrink-0" />
+          <span>
+            Executing deterministic benchmark test suite against <strong className="text-white">{evaluatingModel}</strong>...
+          </span>
         </div>
       )}
 
       {evalResult && (
-        <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-emerald-300">
-          <div className="flex items-center gap-2.5">
-            <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-            <div>
-              <span className="font-semibold">Evaluation Run Succeeded:</span> Evaluated {evalResult.passed_prompts}/{evalResult.total_prompts} items for <span className="font-mono font-bold">{evalResult.model_id}</span>.
-              Score updated to <strong>{(evalResult.overall_quality_score * 100).toFixed(1)}%</strong> in active router profile.
-            </div>
+        <div className="bg-metric-emerald/10 border border-metric-emerald/30 rounded-lg p-3 text-xs font-mono text-metric-emerald flex items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+            <span>
+              Evaluation passed: {evalResult.passed_prompts}/{evalResult.total_prompts} items for <strong className="text-white">{evalResult.model_id}</strong>. Overall quality calibrated to {(evalResult.overall_quality_score * 100).toFixed(1)}%.
+            </span>
           </div>
           <button
             onClick={() => setEvalResult(null)}
-            className="text-[11px] underline text-emerald-400 hover:text-emerald-300"
+            className="text-[10px] uppercase text-ink-muted hover:text-white underline"
           >
-            Dismiss
+            Close
           </button>
         </div>
       )}
 
       {evalError && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-center gap-3 text-xs text-red-300">
-          <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
-          <div>
-            <span className="font-semibold">Evaluation Error:</span> {evalError}
-          </div>
+        <div className="bg-metric-rose/10 border border-metric-rose/30 rounded-lg p-3 text-xs font-mono text-metric-rose flex items-center gap-2.5">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          <span>{evalError}</span>
         </div>
       )}
 
-      {/* Capability & Benchmark Profiles Table */}
-      <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl overflow-hidden">
-        <div className="p-4 border-b border-slate-800">
-          <h3 className="text-sm font-semibold text-white">Registered Model Profiles</h3>
-          <p className="text-xs text-slate-400 mt-0.5">Category quality scores calibrated from deterministic tests & structured validators</p>
-        </div>
-
+      {/* Main Capability Matrix Table */}
+      <div className="bg-app-panel border border-app-border rounded-lg overflow-hidden font-mono text-xs">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-950/70 text-slate-400 uppercase tracking-wider text-[10px] border-b border-slate-800">
+          <table className="w-full text-left">
+            <thead className="bg-app-subtle/70 text-ink-muted uppercase tracking-wider text-[10px] border-b border-app-border">
               <tr>
-                <th className="py-3 px-4">Model & Provider</th>
-                <th className="py-3 px-3 text-center">Coding</th>
-                <th className="py-3 px-3 text-center">Reasoning</th>
-                <th className="py-3 px-3 text-center">Writing</th>
-                <th className="py-3 px-3 text-center">General Q&A</th>
-                <th className="py-3 px-3 text-center">Avg Latency</th>
-                <th className="py-3 px-3 text-center">Cost / 1K</th>
-                <th className="py-3 px-3 text-center">Reliability</th>
-                <th className="py-3 px-4 text-right">Run Evaluation</th>
+                <th className="py-2.5 px-3">Model Identifier</th>
+                <th className="py-2.5 px-2">Provider</th>
+                <th className="py-2.5 px-2 text-center">Coding (Q_c)</th>
+                <th className="py-2.5 px-2 text-center">Reasoning (Q_r)</th>
+                <th className="py-2.5 px-2 text-center">Writing (Q_w)</th>
+                <th className="py-2.5 px-2 text-center">General QA</th>
+                <th className="py-2.5 px-2 text-center">P50 Latency</th>
+                <th className="py-2.5 px-2 text-right">In / 1K</th>
+                <th className="py-2.5 px-2 text-right">Out / 1K</th>
+                <th className="py-2.5 px-2 text-center">Reliability</th>
+                <th className="py-2.5 px-3 text-right">Benchmark Suite</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60">
-              {profiles.map((p, idx) => (
-                <tr key={idx} className="hover:bg-slate-800/30 transition-colors">
-                  <td className="py-3 px-4">
-                    <div className="font-semibold text-white flex items-center gap-1.5">
-                      {p.display_name}
-                      <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
-                        {p.provider}
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-slate-400 font-mono mt-0.5 truncate max-w-xs">
-                      {p.model_id}
-                    </div>
+            <tbody className="divide-y divide-app-border/40">
+              {filtered.map((p, idx) => (
+                <tr key={idx} className="hover:bg-app-subtle/25 transition-colors">
+                  <td className="py-2.5 px-3 font-semibold text-ink-primary">
+                    <div>{p.display_name}</div>
+                    <div className="text-[10px] text-ink-muted font-normal">{p.model_id}</div>
                   </td>
 
-                  {/* Benchmark Quality Scores with color bars */}
-                  <td className="py-3 px-3 text-center font-mono">
-                    <span className={`px-2 py-0.5 rounded font-bold ${
-                      p.coding_quality >= 0.90 ? 'bg-indigo-500/20 text-indigo-300' :
-                      p.coding_quality >= 0.80 ? 'bg-sky-500/20 text-sky-300' : 'bg-slate-800 text-slate-400'
+                  <td className="py-2.5 px-2">
+                    <span className="px-1.5 py-0.5 rounded bg-app-bg border border-app-border text-[10px] uppercase text-ink-secondary">
+                      {p.provider}
+                    </span>
+                  </td>
+
+                  <td className="py-2.5 px-2 text-center">
+                    <span className={`px-1.5 py-0.5 rounded text-[11px] font-bold ${
+                      p.coding_quality >= 0.90 ? 'text-metric-emerald' :
+                      p.coding_quality >= 0.80 ? 'text-metric-cyan' : 'text-ink-secondary'
                     }`}>
                       {(p.coding_quality * 100).toFixed(0)}%
                     </span>
                   </td>
 
-                  <td className="py-3 px-3 text-center font-mono">
-                    <span className={`px-2 py-0.5 rounded font-bold ${
-                      p.reasoning_quality >= 0.90 ? 'bg-indigo-500/20 text-indigo-300' :
-                      p.reasoning_quality >= 0.80 ? 'bg-sky-500/20 text-sky-300' : 'bg-slate-800 text-slate-400'
+                  <td className="py-2.5 px-2 text-center">
+                    <span className={`px-1.5 py-0.5 rounded text-[11px] font-bold ${
+                      p.reasoning_quality >= 0.90 ? 'text-metric-emerald' :
+                      p.reasoning_quality >= 0.80 ? 'text-metric-cyan' : 'text-ink-secondary'
                     }`}>
                       {(p.reasoning_quality * 100).toFixed(0)}%
                     </span>
                   </td>
 
-                  <td className="py-3 px-3 text-center font-mono">
-                    <span className={`px-2 py-0.5 rounded font-bold ${
-                      p.writing_quality >= 0.90 ? 'bg-indigo-500/20 text-indigo-300' :
-                      p.writing_quality >= 0.80 ? 'bg-sky-500/20 text-sky-300' : 'bg-slate-800 text-slate-400'
+                  <td className="py-2.5 px-2 text-center">
+                    <span className={`px-1.5 py-0.5 rounded text-[11px] font-bold ${
+                      p.writing_quality >= 0.90 ? 'text-metric-emerald' :
+                      p.writing_quality >= 0.80 ? 'text-metric-cyan' : 'text-ink-secondary'
                     }`}>
                       {(p.writing_quality * 100).toFixed(0)}%
                     </span>
                   </td>
 
-                  <td className="py-3 px-3 text-center font-mono">
-                    <span className={`px-2 py-0.5 rounded font-bold ${
-                      p.general_qa_quality >= 0.90 ? 'bg-indigo-500/20 text-indigo-300' :
-                      p.general_qa_quality >= 0.80 ? 'bg-sky-500/20 text-sky-300' : 'bg-slate-800 text-slate-400'
+                  <td className="py-2.5 px-2 text-center">
+                    <span className={`px-1.5 py-0.5 rounded text-[11px] font-bold ${
+                      p.general_qa_quality >= 0.90 ? 'text-metric-emerald' :
+                      p.general_qa_quality >= 0.80 ? 'text-metric-cyan' : 'text-ink-secondary'
                     }`}>
                       {(p.general_qa_quality * 100).toFixed(0)}%
                     </span>
                   </td>
 
-                  <td className="py-3 px-3 text-center font-mono text-amber-300">
+                  <td className="py-2.5 px-2 text-center text-metric-amber">
                     {p.avg_latency_ms?.toFixed(0) || 200} ms
                   </td>
 
-                  <td className="py-3 px-3 text-center font-mono text-emerald-400">
-                    ${Number(p.input_cost_per_1k || 0.001).toFixed(5)}
+                  <td className="py-2.5 px-2 text-right text-ink-primary">
+                    ${Number(p.input_cost_per_1k || 0).toFixed(5)}
                   </td>
 
-                  <td className="py-3 px-3 text-center font-mono text-purple-300">
+                  <td className="py-2.5 px-2 text-right text-ink-primary">
+                    ${Number(p.output_cost_per_1k || 0).toFixed(5)}
+                  </td>
+
+                  <td className="py-2.5 px-2 text-center text-metric-emerald">
                     {((p.reliability || 0.99) * 100).toFixed(1)}%
                   </td>
 
-                  <td className="py-3 px-4 text-right">
+                  <td className="py-2.5 px-3 text-right">
                     <button
                       onClick={() => handleRunEval(p.model_id, p.provider)}
                       disabled={evaluatingModel === p.model_id}
-                      className="px-3 py-1 bg-indigo-600/80 hover:bg-indigo-600 disabled:opacity-50 text-white font-medium rounded-md inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                      className="px-2.5 py-1 bg-app-subtle hover:bg-app-hover border border-app-border text-ink-primary rounded inline-flex items-center gap-1.5 transition-colors cursor-pointer text-[11px]"
                     >
                       {evaluatingModel === p.model_id ? (
-                        <Zap className="w-3.5 h-3.5 animate-spin" />
+                        <Terminal className="w-3 h-3 animate-spin text-metric-blue" />
                       ) : (
-                        <Play className="w-3.5 h-3.5 fill-current" />
+                        <Play className="w-2.5 h-2.5 fill-current text-metric-blue" />
                       )}
-                      <span>Evaluate</span>
+                      <span>Run Eval</span>
                     </button>
                   </td>
                 </tr>
@@ -212,35 +233,32 @@ export default function ModelPerformanceView() {
         </div>
       </div>
 
-      {/* Benchmark Methodology Details */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-        <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-4">
-          <div className="flex items-center gap-2 text-indigo-400 font-semibold mb-1">
-            <FileText className="w-4 h-4" />
-            24 Curated Benchmark Prompts
+      {/* Architectural Documentation Notes */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 font-mono text-xs">
+        <div className="bg-app-panel border border-app-border rounded-lg p-3.5 space-y-1">
+          <div className="text-ink-primary font-bold text-[11px] uppercase tracking-wider">
+            Deterministic Evaluation
           </div>
-          <p className="text-slate-400 leading-relaxed">
-            Covers synthetic unit tests, algorithmic proofs, long-form creative writing, and factual queries.
+          <p className="text-[11px] text-ink-muted leading-relaxed">
+            Evaluates outputs through concrete regex parsing, Python AST validity, and required substring inclusion—eliminating subjective hallucination.
           </p>
         </div>
 
-        <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-4">
-          <div className="flex items-center gap-2 text-emerald-400 font-semibold mb-1">
-            <CheckCircle2 className="w-4 h-4" />
-            Deterministic Validation
+        <div className="bg-app-panel border border-app-border rounded-lg p-3.5 space-y-1">
+          <div className="text-ink-primary font-bold text-[11px] uppercase tracking-wider">
+            Multi-Objective Pareto Routing
           </div>
-          <p className="text-slate-400 leading-relaxed">
-            Tests syntax correctness, regex pattern matching, and expected semantic entity inclusion without hallucinated scores.
+          <p className="text-[11px] text-ink-muted leading-relaxed">
+            Dynamic complexity weights adapt trade-offs: $w_q = 0.60$ for complex reasoning/coding, while $w_c = 0.45$ for fast low-complexity Q&A.
           </p>
         </div>
 
-        <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-4">
-          <div className="flex items-center gap-2 text-amber-400 font-semibold mb-1">
-            <Zap className="w-4 h-4" />
-            Dynamic Router Feedback Loop
+        <div className="bg-app-panel border border-app-border rounded-lg p-3.5 space-y-1">
+          <div className="text-ink-primary font-bold text-[11px] uppercase tracking-wider">
+            Live Feedback Loop
           </div>
-          <p className="text-slate-400 leading-relaxed">
-            Benchmark results immediately update in-memory profiles, altering future multi-objective routing decisions.
+          <p className="text-[11px] text-ink-muted leading-relaxed">
+            Completed benchmark suites immediately mutate the in-memory <code>ProfileManager</code>, instantly refining all future routing decisions.
           </p>
         </div>
       </div>

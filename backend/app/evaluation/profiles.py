@@ -186,3 +186,4 @@ class ProfileManager:
             prof.general_qa_quality = round(qa_score, 3)
         if latency_ms is not None:
             prof.avg_latency_ms = round(latency_ms, 1)
+

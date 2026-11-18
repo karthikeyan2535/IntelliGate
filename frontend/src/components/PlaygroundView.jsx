@@ -1,36 +1,35 @@
 import React, { useState } from 'react';
 import {
-  Send, Sparkles, Zap, DollarSign, Database, Clock,
-  Cpu, Award, ShieldAlert, ChevronRight, CheckCircle2,
-  AlertCircle, ArrowRight
+  Terminal, Play, Copy, Check, AlertCircle, CheckCircle2,
+  Cpu, ArrowRight, CornerDownLeft, Info
 } from 'lucide-react';
 import { executePlaygroundChat } from '../services/api';
 
-const SAMPLE_PROMPTS = [
+const PRESET_VECTORS = [
   {
-    label: '⚡ Complex Coding',
-    category: 'coding',
+    tag: 'CODING',
+    label: 'FastAPI + SQLAlchemy 2.0',
     prompt: 'Write an async Python function using FastAPI to query PostgreSQL using SQLAlchemy 2.0 with connection pooling, retries, and comprehensive error handling.',
   },
   {
-    label: '🧠 Logical Reasoning',
-    category: 'reasoning',
+    tag: 'REASONING',
+    label: 'Formal Logic Puzzle',
     prompt: 'Alice has 3 brothers, and each brother has 2 sisters. How many sisters does Alice have? Provide step-by-step logical deduction and proof.',
   },
   {
-    label: '✍️ Creative Writing',
-    category: 'writing',
-    prompt: 'Draft an engaging technical launch announcement for IntelliGate, highlighting its evaluation-driven intelligent routing over brute-force infrastructure.',
+    tag: 'WRITING',
+    label: 'Architecture Announcement',
+    prompt: 'Draft an engineering blog post announcing IntelliGate: an evaluation-driven LLM gateway that uses multi-objective Pareto optimization instead of static routing rules.',
   },
   {
-    label: '💬 Fast Q&A',
-    category: 'general_qa',
-    prompt: 'What is the speed of light in meters per second and who first measured it accurately?',
+    tag: 'QA',
+    label: 'Direct Fact Lookup',
+    prompt: 'What is the speed of light in vacuum in meters per second, and in what year was it fixed by international agreement?',
   },
 ];
 
 export default function PlaygroundView() {
-  const [prompt, setPrompt] = useState(SAMPLE_PROMPTS[0].prompt);
+  const [prompt, setPrompt] = useState(PRESET_VECTORS[0].prompt);
   const [routingMode, setRoutingMode] = useState('intelligent');
   const [selectedModel, setSelectedModel] = useState('auto');
   const [temperature, setTemperature] = useState(0.7);
@@ -39,6 +38,7 @@ export default function PlaygroundView() {
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState(null);
   const [error, setError] = useState(null);
+  const [copiedText, setCopiedText] = useState(false);
 
   async function handleSend() {
     if (!prompt.trim() || loading) return;
@@ -61,87 +61,91 @@ export default function PlaygroundView() {
         client_latency_ms: clientLat,
       });
     } catch (err) {
-      console.error('Playground error', err);
+      console.error('Playground execution error', err);
       setError(err.message || 'Execution failed');
     } finally {
       setLoading(false);
     }
   }
 
-  const routingDecision = response?.routing_decision;
+  function handleKeyDown(e) {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      handleSend();
+    }
+  }
+
+  function copyOutput() {
+    const text = response?.choices?.[0]?.message?.content || '';
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedText(true);
+    setTimeout(() => setCopiedText(false), 2000);
+  }
+
+  const decision = response?.routing_decision;
 
   return (
-    <div className="space-y-6">
-      {/* Top Header & Strategy Controls */}
-      <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-5">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-800">
-          <div>
-            <h2 className="text-base font-semibold text-white flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-indigo-400" />
-              IntelliGate LLM Playground
-            </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Experience evaluation-driven intelligent routing. Every request is classified and matched to optimal models based on empirical benchmarks.
-            </p>
-          </div>
-
-          {/* Routing Mode Selector */}
-          <div className="flex items-center gap-2 bg-slate-950 p-1.5 rounded-lg border border-slate-800">
-            <button
-              onClick={() => { setRoutingMode('intelligent'); setSelectedModel('auto'); }}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                routingMode === 'intelligent'
-                  ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/20'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              🎯 Intelligent Routing
-            </button>
-            <button
-              onClick={() => { setRoutingMode('lowest_cost'); setSelectedModel('auto'); }}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                routingMode === 'lowest_cost'
-                  ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-500/20'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              💰 Lowest Cost
-            </button>
-            <button
-              onClick={() => { setRoutingMode('direct'); setSelectedModel('gpt-4o'); }}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                routingMode === 'direct'
-                  ? 'bg-purple-600 text-white shadow-sm shadow-purple-500/20'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              📌 Direct Model
-            </button>
-          </div>
+    <div className="space-y-4">
+      {/* Configuration & Preset Ribbon */}
+      <div className="bg-app-panel border border-app-border rounded-lg p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+        {/* Strategy Selector */}
+        <div className="flex items-center gap-1.5 bg-app-bg p-1 rounded border border-app-border">
+          <button
+            onClick={() => { setRoutingMode('intelligent'); setSelectedModel('auto'); }}
+            className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors cursor-pointer ${
+              routingMode === 'intelligent'
+                ? 'bg-metric-blue text-white'
+                : 'text-ink-muted hover:text-ink-secondary'
+            }`}
+          >
+            INTELLIGENT ROUTER
+          </button>
+          <button
+            onClick={() => { setRoutingMode('lowest_cost'); setSelectedModel('auto'); }}
+            className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors cursor-pointer ${
+              routingMode === 'lowest_cost'
+                ? 'bg-metric-emerald text-white'
+                : 'text-ink-muted hover:text-ink-secondary'
+            }`}
+          >
+            LOWEST COST
+          </button>
+          <button
+            onClick={() => { setRoutingMode('direct'); setSelectedModel('gpt-4o'); }}
+            className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors cursor-pointer ${
+              routingMode === 'direct'
+                ? 'bg-ink-faint text-ink-primary'
+                : 'text-ink-muted hover:text-ink-secondary'
+            }`}
+          >
+            DIRECT PINNED
+          </button>
         </div>
 
-        {/* Model Dropdown (when direct mode active) & Parameters */}
-        <div className="flex flex-wrap items-center gap-4 pt-4 text-xs">
-          {routingMode === 'direct' && (
-            <div className="flex items-center gap-2">
-              <span className="text-slate-400 font-medium">Select Model:</span>
-              <select
-                value={selectedModel}
-                onChange={(e) => setSelectedModel(e.target.value)}
-                className="bg-slate-950 border border-slate-800 text-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-indigo-500"
-              >
-                <option value="gpt-4o">OpenAI GPT-4o (Frontier)</option>
-                <option value="gpt-4o-mini">OpenAI GPT-4o Mini (Fast)</option>
-                <option value="llama-3.3-70b-versatile">Groq Llama 3.3 70B (Ultra-fast)</option>
-                <option value="llama-3.1-8b-instant">Groq Llama 3.1 8B (Extreme Speed)</option>
-                <option value="gemini-1.5-flash">Google Gemini 1.5 Flash (1M Context)</option>
-                <option value="gemini-1.5-pro">Google Gemini 1.5 Pro</option>
-              </select>
-            </div>
-          )}
-
+        {/* Model Dropdown (when direct) */}
+        {routingMode === 'direct' && (
           <div className="flex items-center gap-2">
-            <span className="text-slate-400 font-medium">Temperature:</span>
+            <span className="text-ink-muted text-[11px]">TARGET:</span>
+            <select
+              value={selectedModel}
+              onChange={(e) => setSelectedModel(e.target.value)}
+              className="bg-app-bg border border-app-border text-ink-primary rounded px-2.5 py-1 text-xs focus:outline-none focus:border-metric-blue font-mono"
+            >
+              <option value="gpt-4o">openai / gpt-4o (Frontier)</option>
+              <option value="llama-3.3-70b-versatile">groq / llama-3.3-70b (LPU Fast)</option>
+              <option value="gpt-4o-mini">openai / gpt-4o-mini</option>
+              <option value="gemini-1.5-flash">gemini / gemini-1.5-flash</option>
+              <option value="llama-3.1-8b-instant">groq / llama-3.1-8b (Ultra-fast)</option>
+              <option value="gemini-1.5-pro">gemini / gemini-1.5-pro</option>
+            </select>
+          </div>
+        )}
+
+        {/* Sliders */}
+        <div className="flex items-center gap-4 text-[11px]">
+          <div className="flex items-center gap-2">
+            <span className="text-ink-muted">TEMP:</span>
             <input
               type="range"
               min="0.0"
@@ -149,13 +153,13 @@ export default function PlaygroundView() {
               step="0.1"
               value={temperature}
               onChange={(e) => setTemperature(parseFloat(e.target.value))}
-              className="w-20 accent-indigo-500"
+              className="w-16 accent-metric-blue"
             />
-            <span className="text-slate-300 font-mono">{temperature}</span>
+            <span className="text-ink-primary w-6 text-right">{temperature}</span>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-slate-400 font-medium">Max Tokens:</span>
+            <span className="text-ink-muted">MAX_TOKENS:</span>
             <input
               type="number"
               min="50"
@@ -163,210 +167,245 @@ export default function PlaygroundView() {
               step="50"
               value={maxTokens}
               onChange={(e) => setMaxTokens(parseInt(e.target.value, 10))}
-              className="w-20 bg-slate-950 border border-slate-800 text-slate-200 rounded px-2 py-1 text-xs focus:outline-none"
+              className="w-16 bg-app-bg border border-app-border text-ink-primary rounded px-2 py-0.5 text-xs text-right focus:outline-none"
             />
           </div>
+        </div>
 
-          {/* Quick preset buttons */}
-          <div className="ml-auto flex items-center gap-2">
-            <span className="text-slate-500 text-[11px] hidden sm:inline">Sample Prompts:</span>
-            {SAMPLE_PROMPTS.map((sample, idx) => (
-              <button
-                key={idx}
-                onClick={() => setPrompt(sample.prompt)}
-                className="text-[11px] px-2.5 py-1 bg-slate-800/80 hover:bg-slate-700 text-slate-300 rounded-md transition-colors"
-              >
-                {sample.label}
-              </button>
-            ))}
-          </div>
+        {/* Preset Vectors */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] text-ink-muted uppercase mr-1">Vectors:</span>
+          {PRESET_VECTORS.map((v, idx) => (
+            <button
+              key={idx}
+              onClick={() => setPrompt(v.prompt)}
+              className="px-2 py-0.5 bg-app-subtle hover:bg-app-hover border border-app-border text-[10px] rounded text-ink-secondary hover:text-ink-primary transition-colors cursor-pointer"
+              title={v.prompt}
+            >
+              {v.tag}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Main Grid: Input Prompt Pane vs Output & Routing Pane */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left: Prompt Input */}
-        <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-5 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                User Prompt Input
-              </label>
-              <span className="text-[11px] text-slate-500 font-mono">
+      {/* Main Split Workbench */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Left: Prompt Input Terminal */}
+        <div className="bg-app-panel border border-app-border rounded-lg flex flex-col justify-between">
+          <div className="p-4">
+            <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-app-border text-xs font-mono">
+              <span className="text-ink-muted uppercase tracking-wider text-[11px] font-semibold">
+                Request Prompt Buffer
+              </span>
+              <span className="text-ink-faint text-[11px]">
                 {prompt.length} chars • ~{Math.ceil(prompt.length / 4)} tokens
               </span>
             </div>
+
             <textarea
-              rows={12}
+              rows={14}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Enter your prompt here..."
-              className="w-full bg-slate-950/80 border border-slate-800 rounded-lg p-3.5 text-sm text-slate-200 font-mono focus:outline-none focus:border-indigo-500/80 transition-colors resize-none placeholder:text-slate-600"
+              onKeyDown={handleKeyDown}
+              placeholder="Enter instruction, question, or code context..."
+              className="w-full bg-app-bg border border-app-border rounded p-3 text-xs text-ink-primary font-mono focus:outline-none focus:border-metric-blue resize-none leading-relaxed"
             />
           </div>
 
-          <div className="mt-4 flex items-center justify-between pt-3 border-t border-slate-800/80">
-            <div className="text-xs text-slate-400 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              Direct pipeline endpoint: <code className="text-slate-300 font-mono">/v1/chat/completions</code>
-            </div>
+          <div className="p-3 bg-app-subtle/40 border-t border-app-border flex items-center justify-between text-xs font-mono">
+            <span className="text-[11px] text-ink-muted flex items-center gap-1">
+              <span>Press</span>
+              <kbd className="px-1.5 py-0.5 bg-app-bg border border-app-border rounded text-[10px] text-ink-secondary">
+                Ctrl+Enter
+              </kbd>
+              <span>to send</span>
+            </span>
+
             <button
               onClick={handleSend}
               disabled={loading || !prompt.trim()}
-              className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold rounded-lg flex items-center gap-2 shadow-lg shadow-indigo-600/20 transition-all cursor-pointer"
+              className="px-4 py-1.5 bg-metric-blue hover:bg-blue-600 disabled:opacity-40 text-white font-semibold text-xs rounded inline-flex items-center gap-2 transition-colors cursor-pointer"
             >
               {loading ? (
                 <>
-                  <Zap className="w-4 h-4 animate-spin text-white" />
-                  Routing & Synthesizing...
+                  <Terminal className="w-3.5 h-3.5 animate-spin" />
+                  <span>Evaluating & Executing...</span>
                 </>
               ) : (
                 <>
-                  <Send className="w-4 h-4" />
-                  Execute Request
+                  <Play className="w-3 h-3 fill-current" />
+                  <span>Execute Pipeline</span>
                 </>
               )}
             </button>
           </div>
         </div>
 
-        {/* Right: Response Output & Routing Breakdown */}
+        {/* Right: Response Output & Decision Matrix */}
         <div className="space-y-4">
           {error && (
-            <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-xs text-red-400 flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <div className="bg-metric-rose/10 border border-metric-rose/30 rounded-lg p-3 text-xs font-mono text-metric-rose flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
               <div>
-                <span className="font-semibold">Execution Failed:</span> {error}
+                <span className="font-bold">Execution Error:</span> {error}
               </div>
             </div>
           )}
 
-          {/* Real-time KPI Ribbon */}
+          {/* Telemetry Strip */}
           {response && (
-            <div className="grid grid-cols-4 gap-2 bg-slate-900/60 border border-slate-800/80 rounded-xl p-3 text-center">
-              <div>
-                <div className="text-[10px] text-slate-400 font-medium">Model Used</div>
-                <div className="text-xs font-bold text-white font-mono truncate mt-0.5">
-                  {response.model || 'Unknown'}
+            <div className="grid grid-cols-4 gap-px bg-app-border border border-app-border rounded-lg overflow-hidden font-mono text-center">
+              <div className="bg-app-panel p-2">
+                <div className="text-[10px] text-ink-muted">RESOLVED MODEL</div>
+                <div className="text-xs font-bold text-ink-primary truncate mt-0.5">
+                  {response.model || 'auto'}
                 </div>
               </div>
-              <div>
-                <div className="text-[10px] text-slate-400 font-medium">Latency</div>
-                <div className="text-xs font-bold text-amber-400 font-mono mt-0.5">
+              <div className="bg-app-panel p-2">
+                <div className="text-[10px] text-ink-muted">ROUNDTRIP</div>
+                <div className="text-xs font-bold text-metric-amber mt-0.5">
                   {response.client_latency_ms || 240} ms
                 </div>
               </div>
-              <div>
-                <div className="text-[10px] text-slate-400 font-medium">Tokens</div>
-                <div className="text-xs font-bold text-cyan-400 font-mono mt-0.5">
+              <div className="bg-app-panel p-2">
+                <div className="text-[10px] text-ink-muted">TOKENS</div>
+                <div className="text-xs font-bold text-metric-cyan mt-0.5">
                   {response.usage?.total_tokens || 0}
                 </div>
               </div>
-              <div>
-                <div className="text-[10px] text-slate-400 font-medium">Cache Status</div>
-                <div className="text-xs font-bold text-purple-400 font-mono mt-0.5">
+              <div className="bg-app-panel p-2">
+                <div className="text-[10px] text-ink-muted">EXACT CACHE</div>
+                <div className={`text-xs font-bold mt-0.5 ${
+                  response.cache_status === 'HIT' ? 'text-metric-emerald' : 'text-ink-secondary'
+                }`}>
                   {response.cache_status || 'MISS'}
                 </div>
               </div>
             </div>
           )}
 
-          {/* Model Response Card */}
-          <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-5">
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                Gateway Normalized Response
-              </label>
-              {response?.cost_usd && (
-                <span className="text-[11px] font-mono text-emerald-400">
-                  Cost: ${Number(response.cost_usd).toFixed(6)}
-                </span>
+          {/* Response Text Box */}
+          <div className="bg-app-panel border border-app-border rounded-lg p-4">
+            <div className="flex items-center justify-between pb-2 mb-2 border-b border-app-border text-xs font-mono">
+              <span className="text-ink-muted uppercase tracking-wider text-[11px] font-semibold flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-metric-emerald" />
+                Assistant Output Stream
+              </span>
+
+              {response?.choices?.[0]?.message?.content && (
+                <button
+                  onClick={copyOutput}
+                  className="text-[11px] text-ink-muted hover:text-ink-primary flex items-center gap-1 transition-colors cursor-pointer"
+                >
+                  {copiedText ? (
+                    <>
+                      <Check className="w-3 h-3 text-metric-emerald" />
+                      <span className="text-metric-emerald">copied</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3 h-3" />
+                      <span>copy</span>
+                    </>
+                  )}
+                </button>
               )}
             </div>
-            <div className="bg-slate-950/80 border border-slate-800 rounded-lg p-3.5 min-h-[140px] max-h-[220px] overflow-y-auto text-xs text-slate-200 font-mono whitespace-pre-wrap">
+
+            <div className="bg-app-bg border border-app-border rounded p-3 min-h-[140px] max-h-[220px] overflow-y-auto text-xs font-mono text-ink-primary whitespace-pre-wrap leading-relaxed">
               {loading ? (
-                <div className="flex items-center justify-center h-28 text-slate-500 gap-2">
-                  <Zap className="w-4 h-4 animate-spin text-indigo-400" />
-                  <span>Evaluating candidate models across benchmarks...</span>
+                <div className="flex items-center justify-center h-28 text-ink-muted gap-2">
+                  <Terminal className="w-4 h-4 animate-spin text-metric-blue" />
+                  <span>Computing Pareto weights across candidate models...</span>
                 </div>
               ) : response?.choices?.[0]?.message?.content ? (
                 response.choices[0].message.content
               ) : (
-                <span className="text-slate-600">Response will appear here after clicking Execute Request...</span>
+                <span className="text-ink-faint">
+                  Execute a prompt above to see gateway response and routing breakdown...
+                </span>
               )}
             </div>
           </div>
 
-          {/* Transparent Routing Decision Card */}
-          {routingDecision && (
-            <div className="bg-slate-900/90 border border-indigo-500/30 rounded-xl p-5 shadow-lg shadow-indigo-950/20">
-              <div className="flex items-center justify-between mb-3">
+          {/* Transparent Routing Decision Matrix */}
+          {decision && (
+            <div className="bg-app-panel border border-app-border rounded-lg p-4 font-mono text-xs space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-app-border">
                 <div className="flex items-center gap-2">
-                  <span className="p-1 rounded bg-indigo-500/20 text-indigo-300 text-xs font-semibold flex items-center gap-1">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    Routing Decision Explanation
+                  <span className="text-ink-primary font-bold uppercase tracking-wider text-[11px]">
+                    ROUTING DECISION TELEMETRY
                   </span>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 capitalize font-medium">
-                    {routingDecision.mode} Mode
+                  <span className="px-1.5 py-0.5 bg-app-subtle border border-app-border rounded text-[10px] text-metric-blue uppercase">
+                    {decision.mode}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-medium uppercase">
-                    {routingDecision.task_category}
+                  <span className="px-1.5 py-0.5 rounded bg-app-subtle border border-app-border text-[10px] text-metric-cyan uppercase">
+                    CATEGORY: {decision.task_category}
                   </span>
-                  <span className="text-[11px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-medium uppercase">
-                    {routingDecision.complexity}
+                  <span className="px-1.5 py-0.5 rounded bg-app-subtle border border-app-border text-[10px] text-metric-amber uppercase">
+                    COMPLEXITY: {decision.complexity}
                   </span>
                 </div>
               </div>
 
-              {/* Decision reason */}
-              <p className="text-xs text-slate-300 leading-relaxed bg-slate-950/60 p-3 rounded-lg border border-slate-800/80">
-                {routingDecision.reason}
-              </p>
+              {/* Justification Text */}
+              <div className="p-2.5 bg-app-bg border border-app-border rounded text-[11px] text-ink-secondary leading-relaxed">
+                {decision.reason}
+              </div>
 
-              {/* Candidate Scoring Breakdown */}
-              {routingDecision.candidate_scores?.length > 0 && (
-                <div className="mt-4 pt-3 border-t border-slate-800">
-                  <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                    Evaluation Matrix & Candidate Utility Ranking
+              {/* Candidate Utility Score Table */}
+              {decision.candidate_scores?.length > 0 && (
+                <div className="space-y-1.5 pt-1">
+                  <div className="text-[10px] font-semibold text-ink-muted uppercase tracking-wider">
+                    Candidate Evaluation Ranking & Multi-Objective Scores
                   </div>
-                  <div className="space-y-2">
-                    {routingDecision.candidate_scores.slice(0, 4).map((c, idx) => (
-                      <div
-                        key={idx}
-                        className={`p-2.5 rounded-lg border text-xs flex items-center justify-between ${
-                          idx === 0
-                            ? 'bg-indigo-950/40 border-indigo-500/40 text-white'
-                            : 'bg-slate-950/40 border-slate-800 text-slate-400'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                            idx === 0 ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'
-                          }`}>
-                            #{c.rank}
-                          </span>
-                          <div>
-                            <span className="font-semibold font-mono text-slate-200">{c.model_id}</span>
-                            <span className="text-[10px] text-slate-500 ml-1.5 uppercase">({c.provider})</span>
-                          </div>
-                        </div>
 
-                        <div className="flex items-center gap-4 text-[11px]">
-                          <span title="Empirical benchmark score for this category">
-                            Quality: <strong className="text-indigo-300">{Number(c.quality_score).toFixed(2)}</strong>
-                          </span>
-                          <span title="Average latency under evaluation">
-                            Latency: <strong className="text-amber-300">{c.latency_ms}ms</strong>
-                          </span>
-                          <span title="Normalized Composite Utility Score">
-                            Score: <strong className="text-emerald-400 font-mono font-bold">{c.overall_score}</strong>
-                          </span>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-[11px]">
+                      <thead className="text-[10px] text-ink-muted border-b border-app-border">
+                        <tr>
+                          <th className="pb-1.5">Rank</th>
+                          <th className="pb-1.5">Candidate Model</th>
+                          <th className="pb-1.5 text-center">Quality (Q)</th>
+                          <th className="pb-1.5 text-center">Cost Score</th>
+                          <th className="pb-1.5 text-center">Latency</th>
+                          <th className="pb-1.5 text-right font-bold">Composite Utility</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-app-border/40">
+                        {decision.candidate_scores.slice(0, 4).map((c, idx) => (
+                          <tr
+                            key={idx}
+                            className={idx === 0 ? 'text-ink-primary font-semibold' : 'text-ink-muted'}
+                          >
+                            <td className="py-1.5">
+                              <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
+                                idx === 0 ? 'bg-metric-blue text-white' : 'bg-app-subtle text-ink-muted'
+                              }`}>
+                                #{c.rank}
+                              </span>
+                            </td>
+                            <td className="py-1.5">
+                              {c.model_id} <span className="text-[10px] text-ink-faint uppercase">({c.provider})</span>
+                            </td>
+                            <td className="py-1.5 text-center text-metric-cyan">
+                              {Number(c.quality_score).toFixed(2)}
+                            </td>
+                            <td className="py-1.5 text-center">
+                              {Number(c.cost_score).toFixed(2)}
+                            </td>
+                            <td className="py-1.5 text-center text-metric-amber">
+                              {c.latency_ms} ms
+                            </td>
+                            <td className="py-1.5 text-right font-bold text-metric-emerald font-mono">
+                              {c.overall_score}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}

@@ -172,3 +172,4 @@ class BenchmarkEvaluator:
         matches = [kw.lower() in lower for kw in item.expected_contains]
         # At least one key indicator or majority matches
         return any(matches)
+

@@ -169,3 +169,4 @@ class GroqProvider(BaseProvider):
 
     def estimate_tokens(self, messages: list[ProviderMessage]) -> int:
         return sum(len(str(m.content).split()) * 2 for m in messages)
+

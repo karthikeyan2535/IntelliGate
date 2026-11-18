@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Clock, CheckCircle2, AlertCircle, RefreshCw, Eye,
-  ShieldCheck, Database, Zap, Cpu, X, ArrowRight
+  FileText, RefreshCw, Eye, X, CheckCircle2,
+  Copy, Check, Clock, ShieldCheck, Database, Layers
 } from 'lucide-react';
 import { fetchRequestLogs, inspectRequest } from '../services/api';
 
@@ -9,7 +9,7 @@ export default function RequestHistoryView() {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedTrace, setSelectedTrace] = useState(null);
-  const [inspectLoading, setInspectLoading] = useState(false);
+  const [copiedId, setCopiedId] = useState(null);
 
   useEffect(() => {
     loadLogs();
@@ -21,114 +21,136 @@ export default function RequestHistoryView() {
       const data = await fetchRequestLogs(25);
       setLogs(data);
     } catch (err) {
-      console.error('Failed to load logs', err);
+      console.error('Failed to load audit logs', err);
     } finally {
       setLoading(false);
     }
   }
 
   async function handleInspect(requestId) {
-    setInspectLoading(true);
     try {
       const trace = await inspectRequest(requestId);
       setSelectedTrace(trace);
     } catch (err) {
-      console.error('Failed to inspect request trace', err);
-    } finally {
-      setInspectLoading(false);
+      console.error('Failed to load trace', err);
     }
   }
 
+  function copyText(txt) {
+    navigator.clipboard.writeText(txt);
+    setCopiedId(txt);
+    setTimeout(() => setCopiedId(null), 1500);
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 font-mono text-xs">
       {/* Header */}
-      <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="bg-app-panel border border-app-border rounded-lg p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-white flex items-center gap-2">
-            <Clock className="w-5 h-5 text-indigo-400" />
-            Gateway Request History & Trace Audit
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-ink-primary flex items-center gap-2">
+            <FileText className="w-4 h-4 text-metric-blue" />
+            Gateway Audit Telemetry & Trace Inspector
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Audit individual request telemetry, routing decisions, cache states, PII redactions, and provider execution durations.
+          <p className="text-[11px] text-ink-muted mt-0.5">
+            Immutable log of all incoming requests, routing outcomes, and pipeline stage timings
           </p>
         </div>
+
         <button
           onClick={loadLogs}
-          className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg flex items-center gap-2 border border-slate-700 transition-colors cursor-pointer self-start sm:self-auto"
+          className="px-2.5 py-1 bg-app-subtle hover:bg-app-hover border border-app-border text-ink-secondary hover:text-ink-primary rounded flex items-center gap-1.5 transition-colors cursor-pointer text-[11px]"
         >
-          <RefreshCw className="w-3.5 h-3.5" />
-          Refresh History
+          <RefreshCw className="w-3 h-3" />
+          <span>Refresh</span>
         </button>
       </div>
 
-      {/* Table */}
-      <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl overflow-hidden">
+      {/* Logs Table */}
+      <div className="bg-app-panel border border-app-border rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-950/70 text-slate-400 uppercase tracking-wider text-[10px] border-b border-slate-800">
+          <table className="w-full text-left">
+            <thead className="bg-app-subtle/70 text-ink-muted uppercase tracking-wider text-[10px] border-b border-app-border">
               <tr>
-                <th className="py-3 px-4">Request ID</th>
-                <th className="py-3 px-3">Resolved Model</th>
-                <th className="py-3 px-3">Provider</th>
-                <th className="py-3 px-3 text-center">Duration</th>
-                <th className="py-3 px-3 text-center">Cache</th>
-                <th className="py-3 px-3 text-center">PII Filter</th>
-                <th className="py-3 px-3 text-center">Status</th>
-                <th className="py-3 px-3">Timestamp</th>
-                <th className="py-3 px-4 text-right">Trace</th>
+                <th className="py-2.5 px-3">Request ID</th>
+                <th className="py-2.5 px-2">Resolved Model</th>
+                <th className="py-2.5 px-2">Provider</th>
+                <th className="py-2.5 px-2 text-center">Latency</th>
+                <th className="py-2.5 px-2 text-center">Cache</th>
+                <th className="py-2.5 px-2 text-center">PII Filter</th>
+                <th className="py-2.5 px-2 text-center">Status</th>
+                <th className="py-2.5 px-2">Timestamp</th>
+                <th className="py-2.5 px-3 text-right">Trace</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60">
+            <tbody className="divide-y divide-app-border/40">
               {logs.map((log, idx) => (
-                <tr key={idx} className="hover:bg-slate-800/30 transition-colors">
-                  <td className="py-3 px-4 font-mono font-medium text-slate-200">
-                    {log.request_id}
+                <tr key={idx} className="hover:bg-app-subtle/25 transition-colors">
+                  <td className="py-2.5 px-3">
+                    <button
+                      onClick={() => copyText(log.request_id)}
+                      className="text-ink-primary hover:text-metric-blue flex items-center gap-1 transition-colors cursor-pointer"
+                    >
+                      <span>{log.request_id}</span>
+                      {copiedId === log.request_id ? (
+                        <Check className="w-2.5 h-2.5 text-metric-emerald" />
+                      ) : (
+                        <Copy className="w-2.5 h-2.5 text-ink-faint" />
+                      )}
+                    </button>
                   </td>
-                  <td className="py-3 px-3 text-slate-300 font-mono">
+
+                  <td className="py-2.5 px-2 text-ink-secondary">
                     {log.model_name || 'auto'}
                   </td>
-                  <td className="py-3 px-3">
-                    <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+
+                  <td className="py-2.5 px-2">
+                    <span className="px-1.5 py-0.5 rounded bg-app-bg border border-app-border text-[10px] uppercase text-ink-secondary">
                       {log.provider_name || 'openai'}
                     </span>
                   </td>
-                  <td className="py-3 px-3 text-center font-mono text-amber-300">
+
+                  <td className="py-2.5 px-2 text-center text-metric-amber">
                     {log.duration_ms} ms
                   </td>
-                  <td className="py-3 px-3 text-center">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+
+                  <td className="py-2.5 px-2 text-center">
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
                       log.cache_hit
-                        ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
-                        : 'bg-slate-800 text-slate-400'
+                        ? 'bg-metric-cyan/15 text-metric-cyan border border-metric-cyan/30'
+                        : 'text-ink-muted'
                     }`}>
                       {log.cache_hit ? 'HIT' : 'MISS'}
                     </span>
                   </td>
-                  <td className="py-3 px-3 text-center">
+
+                  <td className="py-2.5 px-2 text-center">
                     {log.pii_detected ? (
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-metric-amber/15 text-metric-amber border border-metric-amber/30">
                         REDACTED
                       </span>
                     ) : (
-                      <span className="text-slate-500 text-[11px]">—</span>
+                      <span className="text-ink-faint">—</span>
                     )}
                   </td>
-                  <td className="py-3 px-3 text-center">
-                    <span className="inline-flex items-center gap-1 text-[11px] text-emerald-400 font-medium">
-                      <CheckCircle2 className="w-3 h-3" />
+
+                  <td className="py-2.5 px-2 text-center">
+                    <span className="inline-flex items-center gap-1 text-[11px] text-metric-emerald font-semibold">
+                      <span className="w-1.5 h-1.5 rounded-full bg-metric-emerald" />
                       {log.status}
                     </span>
                   </td>
-                  <td className="py-3 px-3 text-slate-400 text-[11px]">
+
+                  <td className="py-2.5 px-2 text-ink-muted text-[11px]">
                     {log.created_at ? new Date(log.created_at).toLocaleTimeString() : 'Just now'}
                   </td>
-                  <td className="py-3 px-4 text-right">
+
+                  <td className="py-2.5 px-3 text-right">
                     <button
                       onClick={() => handleInspect(log.request_id)}
-                      className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-medium rounded inline-flex items-center gap-1 transition-colors cursor-pointer"
+                      className="px-2 py-0.5 bg-app-subtle hover:bg-app-hover border border-app-border text-ink-secondary hover:text-ink-primary rounded text-[11px] inline-flex items-center gap-1 transition-colors cursor-pointer"
                     >
                       <Eye className="w-3 h-3" />
-                      Inspect
+                      <span>Trace</span>
                     </button>
                   </td>
                 </tr>
@@ -138,77 +160,78 @@ export default function RequestHistoryView() {
         </div>
       </div>
 
-      {/* Execution Trace Inspection Modal */}
+      {/* Step-by-Step Distributed Trace Inspector Modal */}
       {selectedTrace && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
-            {/* Modal Header */}
-            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-app-panel border border-app-border rounded-lg w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden font-mono">
+            {/* Header */}
+            <div className="p-4 border-b border-app-border flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-                  <Zap className="w-4 h-4 text-indigo-400" />
-                  Execution Trace Inspector: <code className="text-indigo-300 font-mono text-xs">{selectedTrace.request_id}</code>
+                <h3 className="text-xs font-bold text-ink-primary uppercase tracking-wider flex items-center gap-2">
+                  <span>Execution Trace:</span>
+                  <span className="text-metric-blue">{selectedTrace.request_id}</span>
                 </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
+                <p className="text-[11px] text-ink-muted mt-0.5">
                   Ordered gateway pipeline execution timings and audit signals
                 </p>
               </div>
               <button
                 onClick={() => setSelectedTrace(null)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+                className="text-ink-muted hover:text-ink-primary p-1 rounded hover:bg-app-subtle transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Modal Content */}
-            <div className="p-5 overflow-y-auto space-y-4 text-xs">
+            {/* Content */}
+            <div className="p-4 overflow-y-auto space-y-4 text-xs">
               {/* Telemetry Summary */}
-              <div className="grid grid-cols-4 gap-2 bg-slate-950 p-3 rounded-lg border border-slate-800 text-center">
-                <div>
-                  <div className="text-[10px] text-slate-500">Total Duration</div>
-                  <div className="text-xs font-bold text-amber-400 font-mono mt-0.5">
+              <div className="grid grid-cols-4 gap-px bg-app-border border border-app-border rounded overflow-hidden text-center">
+                <div className="bg-app-bg p-2">
+                  <div className="text-[10px] text-ink-muted">TOTAL DURATION</div>
+                  <div className="text-xs font-bold text-metric-amber mt-0.5">
                     {selectedTrace.total_duration_ms} ms
                   </div>
                 </div>
-                <div>
-                  <div className="text-[10px] text-slate-500">Tokens</div>
-                  <div className="text-xs font-bold text-cyan-400 font-mono mt-0.5">
+                <div className="bg-app-bg p-2">
+                  <div className="text-[10px] text-ink-muted">TOKENS</div>
+                  <div className="text-xs font-bold text-metric-cyan mt-0.5">
                     {selectedTrace.telemetry?.total_tokens || 524}
                   </div>
                 </div>
-                <div>
-                  <div className="text-[10px] text-slate-500">Cost USD</div>
-                  <div className="text-xs font-bold text-emerald-400 font-mono mt-0.5">
+                <div className="bg-app-bg p-2">
+                  <div className="text-[10px] text-ink-muted">EXACT COST</div>
+                  <div className="text-xs font-bold text-metric-emerald mt-0.5">
                     ${Number(selectedTrace.telemetry?.actual_cost_usd || 0.0023).toFixed(5)}
                   </div>
                 </div>
-                <div>
-                  <div className="text-[10px] text-slate-500">PII Redacted</div>
-                  <div className="text-xs font-bold text-purple-400 font-mono mt-0.5">
-                    {selectedTrace.telemetry?.pii_detected ? 'Yes (1 item)' : 'None'}
+                <div className="bg-app-bg p-2">
+                  <div className="text-[10px] text-ink-muted">PII DETECTIONS</div>
+                  <div className="text-xs font-bold text-ink-primary mt-0.5">
+                    {selectedTrace.telemetry?.pii_detected ? '1 redacted' : 'None'}
                   </div>
                 </div>
               </div>
 
-              {/* Stage by stage pipeline steps */}
-              <div>
-                <h4 className="text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-2.5">
-                  Pipeline Stage Breakdown
-                </h4>
-                <div className="space-y-2">
+              {/* Waterfall Execution Stages */}
+              <div className="space-y-1.5">
+                <div className="text-[10px] font-semibold text-ink-muted uppercase tracking-wider mb-2">
+                  Pipeline Stage Waterfall
+                </div>
+
+                <div className="space-y-1">
                   {(selectedTrace.stages || []).map((stage, idx) => (
                     <div
                       key={idx}
-                      className="bg-slate-950 border border-slate-800/80 rounded-lg p-3 flex items-start justify-between gap-4"
+                      className="p-2 bg-app-bg border border-app-border rounded flex items-center justify-between text-[11px]"
                     >
-                      <div>
-                        <div className="font-semibold text-slate-200">{stage.stage}</div>
-                        <div className="text-[11px] text-slate-400 mt-0.5">{stage.details}</div>
+                      <div className="space-y-0.5 pr-2">
+                        <div className="font-semibold text-ink-primary">{stage.stage}</div>
+                        <div className="text-[10px] text-ink-muted">{stage.details}</div>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className="font-mono text-amber-400 text-[11px]">{stage.duration_ms} ms</span>
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300">
+                        <span className="font-mono text-metric-amber text-[11px]">{stage.duration_ms} ms</span>
+                        <span className="px-1.5 py-0.2 rounded text-[9px] uppercase font-bold bg-app-subtle text-ink-secondary border border-app-border">
                           {stage.status}
                         </span>
                       </div>
@@ -218,13 +241,13 @@ export default function RequestHistoryView() {
               </div>
             </div>
 
-            {/* Modal Footer */}
-            <div className="p-4 border-t border-slate-800 bg-slate-950/60 flex justify-end">
+            {/* Footer */}
+            <div className="p-3 border-t border-app-border bg-app-subtle/50 flex justify-end">
               <button
                 onClick={() => setSelectedTrace(null)}
-                className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg transition-colors cursor-pointer"
+                className="px-3 py-1 bg-app-subtle hover:bg-app-hover border border-app-border text-ink-secondary hover:text-ink-primary rounded text-xs transition-colors cursor-pointer"
               >
-                Close
+                Close Trace
               </button>
             </div>
           </div>
