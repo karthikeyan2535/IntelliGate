@@ -82,13 +82,13 @@ class RoutingEngine:
         3. Ranks candidates via multi-objective utility scoring.
         4. Selects optimal model and builds fallback chain.
         """
-        # 1. Direct Routing Mode (if explicitly requested and not set to intelligent/auto)
+        # 1. Direct Routing Mode (if explicitly requested or if a concrete model was specified without auto/intelligent mode)
         clean_model = (requested_model or "").strip().lower()
+        is_auto_routing = clean_model in {"", "auto", "intelligent", "fast-model", "balanced-model", "premium-model"}
         if routing_mode == "direct" or (
             clean_model
-            and clean_model not in {"auto", "intelligent", "fast-model", "balanced-model", "premium-model"}
-            and routing_mode != "intelligent"
-            and routing_mode != "lowest_cost"
+            and not is_auto_routing
+            and routing_mode not in {"intelligent", "lowest_cost"}
         ):
             return self._handle_direct_routing(requested_model or "gpt-4o")
 
@@ -161,17 +161,50 @@ class RoutingEngine:
 
     def _handle_direct_routing(self, model_name: str) -> RoutingDecision:
         profile = ProfileManager.get(model_name)
-        prov = profile.provider if profile else ("gemini" if "gemini" in model_name else "openai")
-        mod = profile.model_id if profile else model_name
+        clean = model_name.lower()
+        if profile:
+            prov = profile.provider
+            mod = profile.model_id
+        elif "gemini" in clean:
+            prov = "gemini"
+            mod = model_name
+        elif "llama" in clean or "mixtral" in clean:
+            prov = "groq"
+            mod = model_name
+        else:
+            prov = "openai"
+            mod = model_name
+
+        fallbacks = []
+        if prov == "gemini":
+            fallbacks = [("groq", "llama-3.3-70b-versatile"), ("openai", "gpt-4o-mini")]
+        elif prov == "openai":
+            fallbacks = [("gemini", "gemini-1.5-flash"), ("groq", "llama-3.3-70b-versatile")]
+        else:
+            fallbacks = [("gemini", "gemini-1.5-flash"), ("openai", "gpt-4o-mini")]
 
         return RoutingDecision(
             mode="direct",
-            task_category="unspecified",
-            complexity="unspecified",
+            task_category="direct_pinned",
+            complexity="direct_pinned",
             selected_model=mod,
             selected_provider=prov,
-            fallback_candidates=[("groq", "llama-3.3-70b-versatile"), ("openai", "gpt-4o-mini")],
+            fallback_candidates=fallbacks,
             reason=f"Direct model requested: '{model_name}'. Bypassing intelligent evaluation ranking.",
+            candidate_scores=[
+                CandidateScore(
+                    model_id=mod,
+                    provider=prov,
+                    overall_score=1.0,
+                    quality_score=profile.coding_quality if profile else 0.9,
+                    cost_score=1.0,
+                    latency_score=1.0,
+                    reliability_score=profile.reliability if profile else 0.99,
+                    cost_per_1k=float(profile.input_cost_per_1k) if profile else 0.001,
+                    latency_ms=profile.avg_latency_ms if profile else 100.0,
+                    rank=1,
+                )
+            ]
         )
 
     def _handle_lowest_cost_routing(
@@ -244,22 +277,22 @@ class RoutingEngine:
 
         # 1. Quality-Tier Gating: Strictly filter candidate pool based on task complexity
         if complexity == ComplexityLevel.COMPLEX:
-            min_quality_threshold = 0.88
+            min_quality_threshold = 0.90
             w_quality = 0.70
             w_cost = 0.15
             w_latency = 0.10
             w_reliability = 0.05
         elif complexity == ComplexityLevel.MODERATE:
-            min_quality_threshold = 0.80
-            w_quality = 0.55
+            min_quality_threshold = 0.85
+            w_quality = 0.50
             w_cost = 0.25
-            w_latency = 0.15
+            w_latency = 0.20
             w_reliability = 0.05
         else:
             # Simple tasks: Cost & speed prioritized
             min_quality_threshold = 0.70
-            w_quality = 0.35
-            w_cost = 0.40
+            w_quality = 0.30
+            w_cost = 0.45
             w_latency = 0.20
             w_reliability = 0.05
 

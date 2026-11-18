@@ -225,7 +225,17 @@ class GatewayPipeline:
 
             # 7. Routing Strategy & Route Candidates
             t0 = time.perf_counter()
-            strategy = request.x_routing_policy or "intelligent"
+            clean_model = (request.model or "").strip().lower()
+            strategy = request.x_routing_policy
+
+            if not strategy:
+                if clean_model in {"", "auto", "intelligent"}:
+                    strategy = "intelligent"
+                elif clean_model in {"fast-model", "lowest_cost", "cheapest"}:
+                    strategy = "lowest_cost"
+                else:
+                    strategy = "direct"
+
             user_prompts = [
                 str(m.content) for m in request.messages if m.content and isinstance(m.content, str)
             ]
