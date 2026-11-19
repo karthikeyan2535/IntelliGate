@@ -185,3 +185,4 @@ class EscalationPolicy:
         elif attempt.status == "wrong_answer":
             return f"Wrong Answer on test cases ({attempt.passed_tests}/{attempt.total_tests} passed).\nDetails:\n{attempt.diagnostics or 'Output differed from expected'}"
         return attempt.diagnostics or f"Execution failed with status: {attempt.status}"
+
