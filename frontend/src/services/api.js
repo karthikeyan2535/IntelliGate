@@ -152,6 +152,15 @@ export async function fetchModelProfiles() {
   }
 }
 
+export async function resetModelProfiles() {
+  const res = await fetch(`${API_BASE}/evaluation/profiles/reset`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return await res.json();
+}
+
 export async function runEvaluationSuite(modelId, provider, maxItems = 12) {
   const res = await fetch(`${API_BASE}/evaluation/run`, {
     method: 'POST',

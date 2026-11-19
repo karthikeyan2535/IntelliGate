@@ -134,15 +134,15 @@ Before utility scoring, candidates must clear hard operational and quality requi
 
 $$\text{Eligible}(P) = \{ m \in \text{Models} \mid Q_{cat}(m) \ge \text{Threshold}(\text{Complexity}) \}$$
 
-- **`COMPLEX` Tasks**: Minimum Quality Threshold = **$0.88$**.  
-  *Eliminates 8B models ($Q \approx 0.76$) and smaller Flash models. Only frontier/large models (`gpt-4o`, `gemini-1.5-pro`, `llama-3.3-70b-versatile`) enter ranking.*
-- **`MODERATE` Tasks**: Minimum Quality Threshold = **$0.80$**.  
-  *Allows balanced models (`gemini-1.5-flash`, `llama-3.3-70b`, `gpt-4o-mini`).*
+- **`COMPLEX` Tasks**: Minimum Quality Threshold = **$0.90$**.  
+  *Eliminates 8B models ($Q \approx 0.76$) and smaller Flash models. Also prevents 70B models ($Q_r = 0.89$) from stealing complex reasoning from Gemini 1.5 Pro ($Q_r = 0.93$) and GPT-4o ($Q_r = 0.95$).*
+- **`MODERATE` Tasks**: Minimum Quality Threshold = **$0.85$**.  
+  *Eliminates 8B models on writing ($Q = 0.83$) and reasoning ($Q = 0.75$). Allows high-efficiency balanced models (`gemini-1.5-flash`, `llama-3.3-70b`, `gpt-4o-mini`).*
 - **`SIMPLE` Tasks**: Minimum Quality Threshold = **$0.70$**.  
-  *All registered models eligible.*
+  *All registered models eligible; cost and sub-50ms latency dominate.*
 
 **Explicit Rejection Logging:**
-Every model that fails Phase 1 is appended to `rejected_candidates` with an explicit reason string (e.g. `Quality score 0.84 < 0.88 threshold for complex coding`). This log is returned in API responses and rendered prominently in the Playground UI.
+Every model that fails Phase 1 is appended to `rejected_candidates` with an explicit reason string (e.g. `Quality score 0.84 < 0.90 threshold for complex coding`). This log is returned in API responses and rendered prominently in the Playground UI.
 
 #### Phase 2: Transparent Linear Utility Function
 For eligible models, the composite score is calculated using a transparent linear utility formula:
@@ -162,9 +162,9 @@ Where:
 
 | Complexity Level | Quality Weight ($w_q$) | Cost Weight ($w_c$) | Latency Weight ($w_l$) | Reliability Weight ($w_r$) | Primary Goal |
 | :--- | :---: | :---: | :---: | :---: | :--- |
-| **`COMPLEX`** | **0.60** | 0.15 | 0.15 | 0.10 | Maximum reasoning depth & architectural correctness |
-| **`MODERATE`** | **0.40** | 0.30 | 0.20 | 0.10 | High fidelity with optimized economic efficiency |
-| **`SIMPLE`** | **0.20** | 0.45 | 0.25 | 0.10 | Sub-100ms response & minimum token expenditure |
+| **`COMPLEX`** | **0.70** | 0.15 | 0.10 | 0.05 | Maximum reasoning depth & architectural correctness |
+| **`MODERATE`** | **0.50** | 0.25 | 0.20 | 0.05 | High fidelity with optimized economic efficiency |
+| **`SIMPLE`** | **0.30** | 0.45 | 0.20 | 0.05 | Sub-100ms response & minimum token expenditure |
 
 ---
 
@@ -176,8 +176,8 @@ IntelliGate supports three user-selectable routing modes via request headers or 
    Runs task classification, complexity estimation, quality gating, and linear utility ranking. Automatically constructs a fallback priority list from runners-up.
 2. **`lowest_cost` (`"fast-model"`)**:
    Sorts all context-eligible models strictly by combined token price (`input_cost + output_cost`) and routes to the cheapest active model.
-3. **`direct` (`"gpt-4o"`, `"llama-3.3-70b-versatile"`, etc.)**:
-   Bypasses algorithmic routing and routes directly to the requested model. Still enforces circuit-breaking and token accounting.
+3. **`direct` (`"gpt-4o"`, `"gemini-1.5-flash"`, `"llama-3.3-70b-versatile"`, etc.)**:
+   Bypasses algorithmic routing and routes directly to the requested model. To ensure seamless drop-in compatibility with standard OpenAI SDKs and HTTP clients, specifying a concrete model name automatically engages direct routing unless `x-routing-policy: intelligent` is explicitly requested. Circuit-breaking, token accounting, and audit logging remain active.
 
 ---
 
@@ -201,9 +201,11 @@ To eliminate evaluation variance without incurring recursive LLM-as-a-judge API 
 - **JSON AST Validation (`"json_valid"`)**: Parses responses through JSON deserializers to confirm valid schema formatting.
 - **Structural Bounds (`"length_check"`)**: Enforces concise constraints (e.g., verifying that a summary does not exceed specified line counts).
 
-### 4.3 Database Persistence & Closed Feedback Loop
+### 4.3 Database Persistence, Stratified Sampling & Closed Feedback Loop
 - **`EvaluationRecord` Storage**: Each benchmark run saves an immutable record in PostgreSQL containing `model_id`, `provider_name`, `total_prompts`, `passed_prompts`, `overall_quality_score`, `category_scores`, `avg_latency_ms`, `duration_seconds`, and full itemized prompt results (`item_details`).
-- **Closed-Loop Calibration**: At the end of every benchmark run, `ProfileManager.update_profile(...)` is called automatically with the measured category scores and latency. Future routing decisions immediately utilize the updated scores without server restarts.
+- **Stratified Category Sampling**: When running partial evaluation suites (e.g. `max_items = 12`), the evaluator samples evenly across all 4 domains (3 Coding, 3 Reasoning, 3 Writing, 3 General Q&A) so no domain is starved of evaluation data.
+- **Provider Credit & Billing Protection**: If all requests fail strictly due to upstream credit, billing, or authorization errors (e.g. `insufficient_quota`), the engine halts safely without wiping out the model's calibrated capability baseline.
+- **Closed-Loop Calibration & Baseline Reset**: At the end of valid benchmark runs, `ProfileManager.update_profile(...)` updates measured scores for tested categories. Developers can restore pristine calibrated baseline profiles at any time via `POST /api/v1/evaluation/profiles/reset` or the **Reset Baselines** button in the dashboard.
 
 ---
 
@@ -287,10 +289,11 @@ The IntelliGate frontend ([frontend/](file:///e:/ai_pro/intelligate/frontend)) f
   - Decision justification with prominent left accent border (`border-l-4 border-metric-blue`).
   - **Applied Weights Strip**: Displays exact weights ($w_q, w_c, w_l, w_r$) applied for the detected complexity tier.
   - **Candidate Ranking Table**: Live candidate breakdown detailing Quality ($Q$), Cost Score, Latency ($ms$), Input/Output Price (`$/1K`), and Composite Utility.
-  - **Rejected Candidates Log**: Clear list of disqualified models with exact rejection rationales (e.g. `Quality score 0.84 < 0.88 threshold for complex coding`).
+  - **Rejected Candidates Log**: Clear list of disqualified models with exact rejection rationales (e.g. `Quality score 0.84 < 0.90 threshold for complex coding`).
 
 #### 3. Model Performance & Benchmarking (`ModelPerformanceView.jsx`)
 - **Capability Matrix**: Direct side-by-side comparison of all 6 registered models across coding, reasoning, writing, latency, and cost per 1K tokens with provider filters.
+- **Reset Baselines Button**: One-click restore button that immediately reverts all active model profiles to pristine calibrated benchmark scores.
 - **Quality Comparison Bar Chart**: Recharts grouped bar chart comparing Coding, Reasoning, and Writing quality across models.
 - **Live Benchmark Suite Runner**: Trigger real evaluation runs across the benchmark suite with live progress indicators.
 - **Empirical Benchmark Run History**: Persistent table of past benchmark runs fetched directly from PostgreSQL.

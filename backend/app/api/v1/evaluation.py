@@ -64,6 +64,15 @@ async def get_performance_profiles() -> List[Dict[str, Any]]:
     ]
 
 
+@router.post("/profiles/reset", summary="Reset model capability profiles to calibrated baselines")
+async def reset_performance_profiles() -> Dict[str, str]:
+    """
+    Resets all active model profiles to the baseline calibrated benchmark scores.
+    """
+    ProfileManager.reset_defaults()
+    return {"status": "success", "message": "Model capability profiles reset to baseline calibrated values."}
+
+
 @router.get("/benchmark-items", summary="List curated benchmark dataset items")
 async def list_benchmark_items() -> List[Dict[str, Any]]:
     """

@@ -8,7 +8,7 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid
 } from 'recharts';
 import {
-  fetchModelProfiles, runEvaluationSuite, fetchEvaluationRuns, fetchEvaluationRunDetails
+  fetchModelProfiles, runEvaluationSuite, fetchEvaluationRuns, fetchEvaluationRunDetails, resetModelProfiles
 } from '../services/api';
 
 export default function ModelPerformanceView() {
@@ -39,6 +39,15 @@ export default function ModelPerformanceView() {
       console.error('Failed to load performance data', err);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleResetBaselines() {
+    try {
+      await resetModelProfiles();
+      await loadAll();
+    } catch (err) {
+      console.error('Failed to reset profiles', err);
     }
   }
 
@@ -125,6 +134,14 @@ export default function ModelPerformanceView() {
           >
             <RefreshCw className="w-3 h-3" />
             <span>Sync</span>
+          </button>
+
+          <button
+            onClick={handleResetBaselines}
+            title="Restore baseline calibrated empirical scores for all models"
+            className="px-2.5 py-1 bg-app-subtle hover:bg-metric-amber/15 border border-app-border text-ink-secondary hover:text-metric-amber rounded flex items-center gap-1.5 transition-colors cursor-pointer"
+          >
+            <span>Reset Baselines</span>
           </button>
         </div>
       </div>

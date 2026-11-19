@@ -57,7 +57,23 @@ class BenchmarkEvaluator:
             from tests.mocks import MockLLMProvider
             provider = MockLLMProvider()
 
-        dataset = BENCHMARK_DATASET[:max_items] if max_items else BENCHMARK_DATASET
+        # If subset requested, sample evenly across all categories (coding, reasoning, writing, general_qa)
+        if max_items and max_items < len(BENCHMARK_DATASET):
+            by_cat: dict[str, list] = {"coding": [], "reasoning": [], "writing": [], "general_qa": []}
+            for item in BENCHMARK_DATASET:
+                by_cat.setdefault(item.category, []).append(item)
+            
+            per_cat = max(1, max_items // len(by_cat))
+            balanced: list = []
+            for cat_items in by_cat.values():
+                balanced.extend(cat_items[:per_cat])
+            if len(balanced) < max_items:
+                remaining = [it for it in BENCHMARK_DATASET if it not in balanced]
+                balanced.extend(remaining[:max_items - len(balanced)])
+            dataset = balanced[:max_items]
+        else:
+            dataset = BENCHMARK_DATASET
+
         total_items = len(dataset)
         passed_count = 0
         total_latency_ms = 0.0
@@ -118,14 +134,27 @@ class BenchmarkEvaluator:
             })
 
         duration_sec = time.perf_counter() - run_start
+
+        # Detect if all requests failed strictly due to upstream credit, billing or auth errors
+        billing_errors = [
+            it["error"] for it in item_results
+            if it.get("error") and any(w in it["error"].lower() for w in ["credit", "quota", "billing", "unauthorized", "api_key", "exceeded"])
+        ]
+        if len(billing_errors) == total_items:
+            # Do NOT overwrite existing capability profile with zeros when API key has no credits
+            raise ValueError(
+                f"Evaluation failed: Provider '{prov_name}' rejected all requests ({billing_errors[0]}). Existing model capability profile preserved."
+            )
+
         overall_score = round(passed_count / total_items, 3) if total_items > 0 else 0.0
         avg_lat = round(total_latency_ms / total_items, 1) if total_items > 0 else 0.0
 
-        cat_scores = {}
+        cat_scores: dict[str, Optional[float]] = {}
         for cat, stats in category_stats.items():
             tot = stats["total"]
             pas = stats["passed"]
-            cat_scores[cat] = round(pas / tot, 3) if tot > 0 else 0.0
+            # Only update score if category was actually tested in this run
+            cat_scores[cat] = round(pas / tot, 3) if tot > 0 else None
 
         # Feed the measured scores directly back into the ProfileManager!
         ProfileManager.update_profile(
@@ -134,7 +163,7 @@ class BenchmarkEvaluator:
             reasoning_score=cat_scores.get("reasoning"),
             writing_score=cat_scores.get("writing"),
             qa_score=cat_scores.get("general_qa"),
-            latency_ms=avg_lat,
+            latency_ms=avg_lat if avg_lat > 0 else None,
         )
 
         logger.info(
