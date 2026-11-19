@@ -18,6 +18,7 @@ from app.api.v1 import (
     auth,
     budget_policies,
     cache,
+    coding,
     evaluation,
     gateway,
     keys,
@@ -173,6 +174,7 @@ def create_app() -> FastAPI:
     app.include_router(models.router, prefix=API_PREFIX)
     app.include_router(budget_policies.router, prefix=API_PREFIX)
     app.include_router(analytics.router, prefix=API_PREFIX)
+    app.include_router(coding.router, prefix=API_PREFIX)
     app.include_router(evaluation.router, prefix=API_PREFIX)
     app.include_router(logs.router, prefix=API_PREFIX)
     app.include_router(cache.router, prefix=API_PREFIX)
