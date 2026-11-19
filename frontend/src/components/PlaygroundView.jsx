@@ -7,22 +7,22 @@ import { executePlaygroundChat } from '../services/api';
 
 const PRESET_VECTORS = [
   {
-    tag: 'CODING',
+    tag: 'Coding',
     label: 'FastAPI + SQLAlchemy 2.0',
     prompt: 'Write an async Python function using FastAPI to query PostgreSQL using SQLAlchemy 2.0 with connection pooling, retries, and comprehensive error handling.',
   },
   {
-    tag: 'REASONING',
+    tag: 'Reasoning',
     label: 'Formal Logic Puzzle',
     prompt: 'Alice has 3 brothers, and each brother has 2 sisters. How many sisters does Alice have? Provide step-by-step logical deduction and proof.',
   },
   {
-    tag: 'WRITING',
+    tag: 'Writing',
     label: 'Architecture Announcement',
     prompt: 'Draft an engineering blog post announcing IntelliGate: an evaluation-driven LLM gateway that uses multi-objective Pareto optimization instead of static routing rules.',
   },
   {
-    tag: 'QA',
+    tag: 'General QA',
     label: 'Direct Fact Lookup',
     prompt: 'What is the speed of light in vacuum in meters per second, and in what year was it fixed by international agreement?',
   },
@@ -102,68 +102,68 @@ export default function PlaygroundView() {
   const decision = response?.routing_decision;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5 font-sans">
       {/* Primary Configuration Toolbar */}
-      <div className="bg-app-panel border border-app-border rounded-lg p-3.5 space-y-3 font-mono text-xs">
+      <div className="bg-white border border-app-border rounded-lg p-4 space-y-3.5 shadow-xs">
         {/* Top Controls Row */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          {/* Strategy Mode Selector */}
-          <div className="flex items-center gap-1.5 bg-app-bg p-1 rounded border border-app-border">
+        <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
+          {/* Strategy Mode Segmented Control */}
+          <div className="inline-flex items-center bg-app-subtle p-0.5 rounded-md border border-app-border text-xs">
             <button
               onClick={() => { setRoutingMode('intelligent'); setSelectedModel('auto'); }}
-              className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors cursor-pointer ${
+              className={`px-3 py-1.5 rounded text-xs font-medium transition-colors cursor-pointer ${
                 routingMode === 'intelligent'
-                  ? 'bg-metric-blue text-white'
-                  : 'text-ink-muted hover:text-ink-secondary'
+                  ? 'bg-white text-ink-primary shadow-xs'
+                  : 'text-ink-secondary hover:text-ink-primary'
               }`}
             >
-              INTELLIGENT ROUTER
+              Intelligent Router
             </button>
             <button
               onClick={() => { setRoutingMode('lowest_cost'); setSelectedModel('auto'); }}
-              className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors cursor-pointer ${
+              className={`px-3 py-1.5 rounded text-xs font-medium transition-colors cursor-pointer ${
                 routingMode === 'lowest_cost'
-                  ? 'bg-metric-emerald text-white'
-                  : 'text-ink-muted hover:text-ink-secondary'
+                  ? 'bg-white text-ink-primary shadow-xs'
+                  : 'text-ink-secondary hover:text-ink-primary'
               }`}
             >
-              LOWEST COST
+              Lowest Cost
             </button>
             <button
               onClick={() => { setRoutingMode('direct'); setSelectedModel('gpt-4o'); }}
-              className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors cursor-pointer ${
+              className={`px-3 py-1.5 rounded text-xs font-medium transition-colors cursor-pointer ${
                 routingMode === 'direct'
-                  ? 'bg-app-subtle text-ink-primary border border-app-border'
-                  : 'text-ink-muted hover:text-ink-secondary'
+                  ? 'bg-white text-ink-primary shadow-xs'
+                  : 'text-ink-secondary hover:text-ink-primary'
               }`}
             >
-              DIRECT PINNED
+              Direct Model
             </button>
           </div>
 
           {/* Model Dropdown (when direct) */}
           {routingMode === 'direct' && (
             <div className="flex items-center gap-2">
-              <span className="text-ink-muted text-[11px]">TARGET:</span>
+              <span className="text-xs text-ink-secondary font-medium">Model:</span>
               <select
                 value={selectedModel}
                 onChange={(e) => setSelectedModel(e.target.value)}
-                className="bg-app-bg border border-app-border text-ink-primary rounded px-2.5 py-1 text-xs focus:outline-none focus:border-metric-blue font-mono"
+                className="bg-white border border-app-border text-ink-primary rounded-md px-2.5 py-1 text-xs focus:outline-none focus:border-metric-blue"
               >
-                <option value="gpt-4o">openai / gpt-4o (Frontier)</option>
-                <option value="llama-3.3-70b-versatile">groq / llama-3.3-70b (LPU Fast)</option>
-                <option value="gpt-4o-mini">openai / gpt-4o-mini</option>
-                <option value="gemini-1.5-flash">gemini / gemini-1.5-flash</option>
-                <option value="llama-3.1-8b-instant">groq / llama-3.1-8b (Ultra-fast)</option>
-                <option value="gemini-1.5-pro">gemini / gemini-1.5-pro</option>
+                <option value="gpt-4o">OpenAI GPT-4o (Frontier)</option>
+                <option value="llama-3.3-70b-versatile">Groq Llama 3.3 70B (Fast)</option>
+                <option value="gpt-4o-mini">OpenAI GPT-4o Mini</option>
+                <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+                <option value="llama-3.1-8b-instant">Groq Llama 3.1 8B (Instant)</option>
+                <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
               </select>
             </div>
           )}
 
           {/* Sliders */}
-          <div className="flex items-center gap-4 text-[11px]">
+          <div className="flex items-center gap-5 text-xs text-ink-secondary">
             <div className="flex items-center gap-2">
-              <span className="text-ink-muted">TEMP:</span>
+              <span className="font-medium">Temperature:</span>
               <input
                 type="range"
                 min="0.0"
@@ -173,11 +173,11 @@ export default function PlaygroundView() {
                 onChange={(e) => setTemperature(parseFloat(e.target.value))}
                 className="w-16 accent-metric-blue cursor-pointer"
               />
-              <span className="text-ink-primary w-6 text-right font-bold">{temperature}</span>
+              <span className="font-mono text-ink-primary w-6 text-right font-medium">{temperature}</span>
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="text-ink-muted">MAX_TOKENS:</span>
+              <span className="font-medium">Max Tokens:</span>
               <input
                 type="number"
                 min="50"
@@ -185,19 +185,19 @@ export default function PlaygroundView() {
                 step="50"
                 value={maxTokens}
                 onChange={(e) => setMaxTokens(parseInt(e.target.value, 10))}
-                className="w-16 bg-app-bg border border-app-border text-ink-primary rounded px-2 py-0.5 text-xs text-right focus:outline-none font-bold"
+                className="w-16 bg-white border border-app-border text-ink-primary rounded-md px-2 py-0.5 text-xs text-right focus:outline-none font-mono"
               />
             </div>
           </div>
 
           {/* Preset Vectors */}
           <div className="flex items-center gap-1.5">
-            <span className="text-[10px] text-ink-muted uppercase mr-1">Presets:</span>
+            <span className="text-xs text-ink-secondary font-medium mr-0.5">Presets:</span>
             {PRESET_VECTORS.map((v, idx) => (
               <button
                 key={idx}
                 onClick={() => setPrompt(v.prompt)}
-                className="px-2 py-0.5 bg-app-subtle hover:bg-app-hover border border-app-border text-[10px] rounded text-ink-secondary hover:text-ink-primary transition-colors cursor-pointer"
+                className="px-2 py-1 bg-app-subtle hover:bg-slate-200/70 border border-app-border text-xs rounded text-ink-secondary hover:text-ink-primary transition-colors cursor-pointer"
                 title={v.prompt}
               >
                 {v.tag}
@@ -207,21 +207,21 @@ export default function PlaygroundView() {
         </div>
 
         {/* Secondary Row: Manual Category & Complexity Overrides */}
-        <div className="pt-2 border-t border-app-border/60 flex flex-wrap items-center justify-between gap-3 text-[11px]">
+        <div className="pt-3 border-t border-app-border/70 flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-4">
             {/* Category Override */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-ink-muted">CATEGORY OVERRIDE:</span>
+            <div className="flex items-center gap-2">
+              <span className="text-ink-secondary font-medium">Domain:</span>
               <select
                 value={overrideCategory}
                 onChange={(e) => setOverrideCategory(e.target.value)}
-                className={`bg-app-bg border text-xs rounded px-2 py-0.5 focus:outline-none ${
+                className={`bg-white border text-xs rounded-md px-2 py-1 focus:outline-none ${
                   overrideCategory !== 'auto'
-                    ? 'border-metric-cyan text-metric-cyan font-bold'
+                    ? 'border-metric-cyan text-metric-cyan font-medium'
                     : 'border-app-border text-ink-secondary'
                 }`}
               >
-                <option value="auto">Auto-Detect (Heuristic)</option>
+                <option value="auto">Auto-detect (Heuristic)</option>
                 <option value="coding">Coding</option>
                 <option value="reasoning">Reasoning</option>
                 <option value="writing">Writing</option>
@@ -230,18 +230,18 @@ export default function PlaygroundView() {
             </div>
 
             {/* Complexity Override */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-ink-muted">COMPLEXITY OVERRIDE:</span>
+            <div className="flex items-center gap-2">
+              <span className="text-ink-secondary font-medium">Complexity:</span>
               <select
                 value={overrideComplexity}
                 onChange={(e) => setOverrideComplexity(e.target.value)}
-                className={`bg-app-bg border text-xs rounded px-2 py-0.5 focus:outline-none ${
+                className={`bg-white border text-xs rounded-md px-2 py-1 focus:outline-none ${
                   overrideComplexity !== 'auto'
-                    ? 'border-metric-amber text-metric-amber font-bold'
+                    ? 'border-metric-amber text-metric-amber font-medium'
                     : 'border-app-border text-ink-secondary'
                 }`}
               >
-                <option value="auto">Auto-Estimate (Depth & Constraints)</option>
+                <option value="auto">Auto-estimate</option>
                 <option value="simple">Simple</option>
                 <option value="moderate">Moderate</option>
                 <option value="complex">Complex</option>
@@ -250,20 +250,20 @@ export default function PlaygroundView() {
           </div>
 
           {/* System Prompt Toggle & Reset */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <button
               onClick={() => setShowSystemPrompt(!showSystemPrompt)}
-              className="text-ink-secondary hover:text-ink-primary flex items-center gap-1 text-[11px] cursor-pointer"
+              className="text-ink-secondary hover:text-ink-primary flex items-center gap-1 text-xs cursor-pointer"
             >
               {showSystemPrompt ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
               <span>System Prompt</span>
             </button>
             <button
               onClick={handleReset}
-              className="px-2 py-0.5 bg-app-subtle hover:bg-app-hover border border-app-border text-ink-muted hover:text-ink-primary rounded flex items-center gap-1 text-[10px] cursor-pointer"
+              className="px-2 py-1 bg-white hover:bg-app-subtle border border-app-border text-ink-secondary hover:text-ink-primary rounded-md flex items-center gap-1 text-xs cursor-pointer transition-colors"
               title="Reset prompt and parameters"
             >
-              <RotateCcw className="w-2.5 h-2.5" />
+              <RotateCcw className="w-3 h-3 text-ink-muted" />
               <span>Reset</span>
             </button>
           </div>
@@ -271,56 +271,56 @@ export default function PlaygroundView() {
 
         {/* Expandable System Prompt Field */}
         {showSystemPrompt && (
-          <div className="pt-2 border-t border-app-border/40">
-            <div className="text-[10px] text-ink-muted uppercase mb-1">System Instructions (Role: system)</div>
+          <div className="pt-3 border-t border-app-border/70">
+            <label className="block text-xs font-medium text-ink-secondary mb-1">System Instructions</label>
             <textarea
               rows={2}
               value={systemPrompt}
               onChange={(e) => setSystemPrompt(e.target.value)}
               placeholder="System prompt context (e.g. persona, formatting guidelines)..."
-              className="w-full bg-app-bg border border-app-border rounded p-2 text-xs text-ink-primary font-mono focus:outline-none focus:border-metric-blue resize-none"
+              className="w-full bg-app-bg border border-app-border rounded-md p-2.5 text-xs text-ink-primary font-mono focus:outline-none focus:border-metric-blue resize-none leading-relaxed"
             />
           </div>
         )}
       </div>
 
       {/* Main Split Workbench */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Left: Prompt Input Buffer */}
-        <div className="bg-app-panel border border-app-border rounded-lg flex flex-col justify-between">
+        <div className="bg-white border border-app-border rounded-lg flex flex-col justify-between shadow-xs">
           <div className="p-4">
-            <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-app-border text-xs font-mono">
-              <span className="text-ink-muted uppercase tracking-wider text-[11px] font-semibold">
-                User Prompt Buffer (Role: user)
+            <div className="flex items-center justify-between pb-3 mb-3 border-b border-app-border text-xs">
+              <span className="font-semibold text-ink-primary">
+                Prompt Input
               </span>
-              <span className="text-ink-faint text-[11px]">
+              <span className="text-xs text-ink-secondary font-mono">
                 {prompt.length} chars • ~{Math.ceil(prompt.length / 4)} tokens
               </span>
             </div>
 
             <textarea
-              rows={14}
+              rows={13}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Enter instruction, question, or code context..."
-              className="w-full bg-app-bg border border-app-border rounded p-3 text-xs text-ink-primary font-mono focus:outline-none focus:border-metric-blue resize-none leading-relaxed"
+              className="w-full bg-app-bg/50 border border-app-border rounded-md p-3 text-xs text-ink-primary font-mono focus:outline-none focus:border-metric-blue resize-none leading-relaxed"
             />
           </div>
 
-          <div className="p-3 bg-app-subtle/40 border-t border-app-border flex items-center justify-between text-xs font-mono">
-            <span className="text-[11px] text-ink-muted flex items-center gap-1">
+          <div className="p-3 bg-app-subtle/50 border-t border-app-border flex items-center justify-between text-xs">
+            <span className="text-xs text-ink-secondary flex items-center gap-1.5">
               <span>Press</span>
-              <kbd className="px-1.5 py-0.5 bg-app-bg border border-app-border rounded text-[10px] text-ink-secondary">
+              <kbd className="px-1.5 py-0.5 bg-white border border-app-border rounded text-[11px] font-mono text-ink-primary shadow-2xs">
                 Ctrl+Enter
               </kbd>
-              <span>to execute</span>
+              <span>to run</span>
             </span>
 
             <button
               onClick={handleSend}
               disabled={loading || !prompt.trim()}
-              className="px-4 py-1.5 bg-metric-blue hover:bg-blue-600 disabled:opacity-40 text-white font-semibold text-xs rounded inline-flex items-center gap-2 transition-colors cursor-pointer"
+              className="px-4 py-2 bg-metric-blue hover:bg-blue-600 disabled:opacity-40 text-white font-medium text-xs rounded-md inline-flex items-center gap-2 transition-colors cursor-pointer shadow-xs"
             >
               {loading ? (
                 <>
@@ -340,46 +340,46 @@ export default function PlaygroundView() {
         {/* Right: Response Output & Decision Matrix */}
         <div className="space-y-4">
           {error && (
-            <div className="bg-metric-rose/10 border border-metric-rose/30 rounded-lg p-3 text-xs font-mono text-metric-rose flex items-start gap-2.5">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3.5 text-xs text-red-700 flex items-start gap-2.5">
               <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
               <div>
-                <span className="font-bold">Execution Error:</span> {error}
+                <span className="font-semibold">Execution Error:</span> {error}
               </div>
             </div>
           )}
 
           {/* Telemetry Strip */}
           {response && (
-            <div className="grid grid-cols-5 gap-px bg-app-border border border-app-border rounded-lg overflow-hidden font-mono text-center">
-              <div className="bg-app-panel p-2">
-                <div className="text-[10px] text-ink-muted uppercase">Resolved Model</div>
-                <div className="text-xs font-bold text-ink-primary truncate mt-0.5">
+            <div className="grid grid-cols-5 gap-px bg-app-border border border-app-border rounded-lg overflow-hidden text-center shadow-xs">
+              <div className="bg-white p-2.5">
+                <div className="text-[11px] text-ink-secondary font-medium">Resolved Model</div>
+                <div className="text-xs font-semibold font-mono text-ink-primary truncate mt-0.5">
                   {response.model || 'auto'}
                 </div>
               </div>
-              <div className="bg-app-panel p-2">
-                <div className="text-[10px] text-ink-muted uppercase">Roundtrip</div>
-                <div className="text-xs font-bold text-metric-amber mt-0.5">
+              <div className="bg-white p-2.5">
+                <div className="text-[11px] text-ink-secondary font-medium">Roundtrip</div>
+                <div className="text-xs font-semibold font-mono text-metric-amber mt-0.5">
                   {response.client_latency_ms || 240} ms
                 </div>
               </div>
-              <div className="bg-app-panel p-2">
-                <div className="text-[10px] text-ink-muted uppercase">Tokens</div>
-                <div className="text-xs font-bold text-metric-cyan mt-0.5">
+              <div className="bg-white p-2.5">
+                <div className="text-[11px] text-ink-secondary font-medium">Tokens</div>
+                <div className="text-xs font-semibold font-mono text-metric-cyan mt-0.5">
                   {response.usage?.total_tokens || 0}
                 </div>
               </div>
-              <div className="bg-app-panel p-2">
-                <div className="text-[10px] text-ink-muted uppercase">Cache</div>
-                <div className={`text-xs font-bold mt-0.5 ${
+              <div className="bg-white p-2.5">
+                <div className="text-[11px] text-ink-secondary font-medium">Cache</div>
+                <div className={`text-xs font-semibold font-mono mt-0.5 ${
                   response.cache_status === 'HIT' ? 'text-metric-emerald' : 'text-ink-secondary'
                 }`}>
                   {response.cache_status || 'MISS'}
                 </div>
               </div>
-              <div className="bg-app-panel p-2">
-                <div className="text-[10px] text-ink-muted uppercase">Cost USD</div>
-                <div className="text-xs font-bold text-metric-emerald mt-0.5">
+              <div className="bg-white p-2.5">
+                <div className="text-[11px] text-ink-secondary font-medium">Cost USD</div>
+                <div className="text-xs font-semibold font-mono text-metric-emerald mt-0.5">
                   {response.cost_usd != null ? `$${Number(response.cost_usd).toFixed(6)}` : '—'}
                 </div>
               </div>
@@ -387,44 +387,44 @@ export default function PlaygroundView() {
           )}
 
           {/* Response Text Box */}
-          <div className="bg-app-panel border border-app-border rounded-lg p-4">
-            <div className="flex items-center justify-between pb-2 mb-2 border-b border-app-border text-xs font-mono">
-              <span className="text-ink-muted uppercase tracking-wider text-[11px] font-semibold flex items-center gap-1.5">
+          <div className="bg-white border border-app-border rounded-lg p-4 shadow-xs">
+            <div className="flex items-center justify-between pb-3 mb-3 border-b border-app-border text-xs">
+              <span className="font-semibold text-ink-primary flex items-center gap-1.5">
                 <CheckCircle2 className="w-3.5 h-3.5 text-metric-emerald" />
-                Assistant Output Stream
+                Assistant Output
               </span>
 
               {response?.choices?.[0]?.message?.content && (
                 <button
                   onClick={copyOutput}
-                  className="text-[11px] text-ink-muted hover:text-ink-primary flex items-center gap-1 transition-colors cursor-pointer"
+                  className="text-xs text-ink-secondary hover:text-ink-primary flex items-center gap-1 transition-colors cursor-pointer"
                 >
                   {copiedText ? (
                     <>
-                      <Check className="w-3 h-3 text-metric-emerald" />
-                      <span className="text-metric-emerald">copied</span>
+                      <Check className="w-3.5 h-3.5 text-metric-emerald" />
+                      <span className="text-metric-emerald font-medium">Copied</span>
                     </>
                   ) : (
                     <>
-                      <Copy className="w-3 h-3" />
-                      <span>copy</span>
+                      <Copy className="w-3.5 h-3.5 text-ink-muted" />
+                      <span>Copy</span>
                     </>
                   )}
                 </button>
               )}
             </div>
 
-            <div className="bg-app-bg border border-app-border rounded p-3 min-h-[140px] max-h-[220px] overflow-y-auto text-xs font-mono text-ink-primary whitespace-pre-wrap leading-relaxed">
+            <div className="bg-app-bg/50 border border-app-border rounded-md p-3 min-h-[140px] max-h-[220px] overflow-y-auto text-xs font-mono text-ink-primary whitespace-pre-wrap leading-relaxed">
               {loading ? (
-                <div className="flex items-center justify-center h-28 text-ink-muted gap-2">
+                <div className="flex items-center justify-center h-28 text-ink-secondary gap-2 font-sans">
                   <Terminal className="w-4 h-4 animate-spin text-metric-blue" />
                   <span>Evaluating Pareto utility across candidate models...</span>
                 </div>
               ) : response?.choices?.[0]?.message?.content ? (
                 response.choices[0].message.content
               ) : (
-                <span className="text-ink-faint">
-                  Execute a prompt above to see gateway response and routing breakdown...
+                <span className="text-ink-muted font-sans">
+                  Execute a prompt above to view model output and routing rationale.
                 </span>
               )}
             </div>
@@ -432,43 +432,43 @@ export default function PlaygroundView() {
 
           {/* Transparent Routing Decision Matrix */}
           {decision && (
-            <div className="bg-app-panel border border-app-border rounded-lg p-4 font-mono text-xs space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-app-border">
+            <div className="bg-white border border-app-border rounded-lg p-4 text-xs space-y-3.5 shadow-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-app-border">
                 <div className="flex items-center gap-2">
-                  <span className="text-ink-primary font-bold uppercase tracking-wider text-[11px]">
-                    ROUTING DECISION TELEMETRY
+                  <span className="font-semibold text-ink-primary">
+                    Routing Decision Rationale
                   </span>
-                  <span className="px-1.5 py-0.5 bg-app-subtle border border-app-border rounded text-[10px] text-metric-blue uppercase font-bold">
+                  <span className="px-2 py-0.5 bg-blue-50 border border-blue-200 text-blue-700 rounded text-[11px] font-medium">
                     {decision.mode}
                   </span>
                   {decision.is_overridden && (
-                    <span className="px-1.5 py-0.5 bg-metric-amber/15 border border-metric-amber/30 rounded text-[10px] text-metric-amber uppercase font-bold">
-                      MANUAL OVERRIDE
+                    <span className="px-2 py-0.5 bg-amber-50 border border-amber-200 text-amber-800 rounded text-[11px] font-medium">
+                      Manual Override
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="px-1.5 py-0.5 rounded bg-app-subtle border border-app-border text-[10px] text-metric-cyan uppercase">
-                    CATEGORY: {decision.task_category}
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="px-2 py-0.5 rounded bg-app-subtle border border-app-border text-ink-secondary capitalize">
+                    {decision.task_category}
                   </span>
-                  <span className="px-1.5 py-0.5 rounded bg-app-subtle border border-app-border text-[10px] text-metric-amber uppercase">
-                    COMPLEXITY: {decision.complexity}
+                  <span className="px-2 py-0.5 rounded bg-app-subtle border border-app-border text-ink-secondary capitalize">
+                    {decision.complexity}
                   </span>
                 </div>
               </div>
 
               {/* Justification Text */}
-              <div className="p-2.5 bg-app-bg border border-app-border rounded text-xs text-ink-secondary leading-relaxed border-l-4 border-metric-blue pl-3">
+              <div className="p-3 bg-app-bg border border-app-border rounded-md text-xs text-ink-secondary leading-relaxed border-l-4 border-metric-blue">
                 {decision.reason}
               </div>
 
               {/* Applied Weights Strip */}
               {decision.applied_weights && Object.keys(decision.applied_weights).length > 0 && (
-                <div className="flex items-center gap-3 text-[10px] text-ink-muted bg-app-subtle/50 px-2.5 py-1.5 rounded border border-app-border/40">
-                  <span className="font-semibold text-ink-secondary uppercase">Applied Weights:</span>
+                <div className="flex items-center gap-3 text-xs text-ink-secondary bg-app-subtle/60 px-3 py-2 rounded-md border border-app-border">
+                  <span className="font-medium text-ink-primary">Applied Weights:</span>
                   {Object.entries(decision.applied_weights).map(([k, w]) => (
-                    <span key={k} className="font-mono">
-                      {k}: <strong className="text-ink-primary">{(w * 100).toFixed(0)}%</strong>
+                    <span key={k}>
+                      {k}: <strong className="font-mono text-ink-primary font-semibold">{(w * 100).toFixed(0)}%</strong>
                     </span>
                   ))}
                 </div>
@@ -476,53 +476,53 @@ export default function PlaygroundView() {
 
               {/* Candidate Utility Score Table */}
               {decision.candidate_scores?.length > 0 && (
-                <div className="space-y-1.5 pt-1">
-                  <div className="text-[10px] font-semibold text-ink-muted uppercase tracking-wider">
-                    Eligible Candidate Ranking (Linear Multi-Objective Utility)
+                <div className="space-y-2 pt-1">
+                  <div className="text-xs font-semibold text-ink-primary">
+                    Candidate Model Ranking (Multi-Objective Utility)
                   </div>
 
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left text-[11px]">
-                      <thead className="text-[10px] text-ink-muted border-b border-app-border">
+                    <table className="w-full text-left text-xs">
+                      <thead className="text-[11px] font-semibold text-ink-secondary border-b border-app-border">
                         <tr>
-                          <th className="pb-1.5">Rank</th>
-                          <th className="pb-1.5">Model</th>
-                          <th className="pb-1.5 text-center">Quality (Q)</th>
-                          <th className="pb-1.5 text-center">Cost Score</th>
-                          <th className="pb-1.5 text-center">Latency</th>
-                          <th className="pb-1.5 text-center">$/1K</th>
-                          <th className="pb-1.5 text-right font-bold">Utility Score</th>
+                          <th className="pb-2">Rank</th>
+                          <th className="pb-2">Model</th>
+                          <th className="pb-2 text-center">Quality (Q)</th>
+                          <th className="pb-2 text-center">Cost Score</th>
+                          <th className="pb-2 text-center">Latency</th>
+                          <th className="pb-2 text-center">$/1K</th>
+                          <th className="pb-2 text-right">Utility</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-app-border/40">
+                      <tbody className="divide-y divide-app-border/60">
                         {decision.candidate_scores.map((c, idx) => (
                           <tr
                             key={idx}
-                            className={idx === 0 ? 'text-ink-primary font-semibold' : 'text-ink-muted'}
+                            className={idx === 0 ? 'bg-blue-50/50 font-medium' : 'hover:bg-app-subtle/30'}
                           >
-                            <td className="py-1.5">
-                              <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
-                                idx === 0 ? 'bg-metric-blue text-white' : 'bg-app-subtle text-ink-muted'
+                            <td className="py-2">
+                              <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold font-mono ${
+                                idx === 0 ? 'bg-blue-600 text-white' : 'bg-app-subtle text-ink-secondary'
                               }`}>
                                 #{c.rank}
                               </span>
                             </td>
-                            <td className="py-1.5">
-                              {c.model_id} <span className="text-[10px] text-ink-faint uppercase">({c.provider})</span>
+                            <td className="py-2 font-mono text-[11px]">
+                              {c.model_id} <span className="text-[10px] text-ink-muted">({c.provider})</span>
                             </td>
-                            <td className="py-1.5 text-center text-metric-cyan">
+                            <td className="py-2 text-center font-mono text-[11px] text-metric-cyan">
                               {Number(c.quality_score).toFixed(2)}
                             </td>
-                            <td className="py-1.5 text-center">
+                            <td className="py-2 text-center font-mono text-[11px]">
                               {Number(c.cost_score).toFixed(2)}
                             </td>
-                            <td className="py-1.5 text-center text-metric-amber">
+                            <td className="py-2 text-center font-mono text-[11px] text-metric-amber">
                               {c.latency_ms} ms
                             </td>
-                            <td className="py-1.5 text-center text-ink-secondary font-mono">
+                            <td className="py-2 text-center font-mono text-[11px] text-ink-secondary">
                               {c.cost_per_1k != null ? `$${Number(c.cost_per_1k).toFixed(5)}` : '—'}
                             </td>
-                            <td className="py-1.5 text-right font-bold text-metric-emerald font-mono">
+                            <td className="py-2 text-right font-mono text-xs font-semibold text-metric-emerald">
                               {c.overall_score}
                             </td>
                           </tr>
@@ -535,16 +535,16 @@ export default function PlaygroundView() {
 
               {/* Rejected Candidates & Reasons */}
               {decision.rejected_candidates?.length > 0 && (
-                <div className="space-y-1.5 pt-2 border-t border-app-border/40">
-                  <div className="text-[10px] font-semibold text-ink-muted uppercase tracking-wider flex items-center gap-1.5">
-                    <ShieldAlert className="w-3 h-3 text-metric-amber" />
-                    <span>Candidate Filter & Rejection Log</span>
+                <div className="space-y-2 pt-2.5 border-t border-app-border">
+                  <div className="text-xs font-semibold text-ink-primary flex items-center gap-1.5">
+                    <ShieldAlert className="w-3.5 h-3.5 text-metric-amber" />
+                    <span>Candidate Exclusions</span>
                   </div>
-                  <div className="space-y-1">
+                  <div className="space-y-1.5">
                     {decision.rejected_candidates.slice(0, 5).map((r, idx) => (
-                      <div key={idx} className="flex items-start justify-between text-[10px] bg-app-subtle/30 px-2 py-1 rounded border border-app-border/40">
-                        <span className="font-semibold text-ink-secondary">{r.model_id} <span className="text-ink-faint">({r.provider})</span>:</span>
-                        <span className="text-ink-muted text-right max-w-[70%]">{r.reason}</span>
+                      <div key={idx} className="flex items-start justify-between text-xs bg-app-subtle/40 px-2.5 py-1.5 rounded-md border border-app-border/80">
+                        <span className="font-mono text-[11px] text-ink-primary font-medium">{r.model_id}:</span>
+                        <span className="text-ink-secondary text-right max-w-[70%]">{r.reason}</span>
                       </div>
                     ))}
                   </div>

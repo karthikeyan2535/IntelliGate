@@ -28,19 +28,19 @@ export default function App() {
   return (
     <div className="min-h-screen bg-app-bg text-ink-primary flex flex-col font-sans selection:bg-metric-blue selection:text-white">
       {/* Top Header */}
-      <header className="border-b border-app-border bg-app-panel/95 sticky top-0 z-50">
+      <header className="border-b border-app-border bg-white sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="h-14 flex items-center justify-between">
             {/* Identity */}
             <div className="flex items-center gap-3">
-              <div className="w-7 h-7 rounded bg-metric-blue/15 border border-metric-blue/30 flex items-center justify-center text-metric-blue font-mono font-bold text-xs">
+              <div className="w-7 h-7 rounded bg-blue-50 border border-blue-200/80 flex items-center justify-center text-blue-600 font-mono font-bold text-xs tracking-tight shadow-xs">
                 IG
               </div>
               <div className="flex items-center gap-2">
-                <span className="font-bold text-sm tracking-tight text-ink-primary font-mono">
-                  INTELLIGATE
+                <span className="font-semibold text-sm tracking-tight text-ink-primary">
+                  IntelliGate
                 </span>
-                <span className="text-ink-faint">/</span>
+                <span className="text-ink-muted text-xs hidden sm:inline">/</span>
                 <span className="text-xs text-ink-secondary hidden sm:inline">
                   Evaluation-Driven LLM Gateway
                 </span>
@@ -48,18 +48,18 @@ export default function App() {
             </div>
 
             {/* Provider Connectivity Indicators */}
-            <div className="hidden md:flex items-center gap-2 text-[11px] font-mono text-ink-muted">
-              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-app-subtle border border-app-border">
+            <div className="hidden md:flex items-center gap-2 text-xs text-ink-secondary">
+              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-app-subtle/80 border border-app-border text-[11px]">
                 <span className="w-1.5 h-1.5 rounded-full bg-metric-emerald" />
-                <span className="text-ink-secondary">openai</span>
+                <span>OpenAI</span>
               </span>
-              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-app-subtle border border-app-border">
+              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-app-subtle/80 border border-app-border text-[11px]">
                 <span className="w-1.5 h-1.5 rounded-full bg-metric-emerald" />
-                <span className="text-ink-secondary">gemini</span>
+                <span>Gemini</span>
               </span>
-              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-app-subtle border border-app-border">
+              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-app-subtle/80 border border-app-border text-[11px]">
                 <span className="w-1.5 h-1.5 rounded-full bg-metric-emerald" />
-                <span className="text-ink-secondary">groq</span>
+                <span>Groq</span>
               </span>
             </div>
 
@@ -67,18 +67,18 @@ export default function App() {
             <div className="flex items-center gap-2 text-xs">
               <button
                 onClick={copyApiKey}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-app-subtle hover:bg-app-hover border border-app-border text-ink-secondary hover:text-ink-primary font-mono text-[11px] transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white hover:bg-app-subtle border border-app-border text-ink-secondary hover:text-ink-primary text-xs transition-colors cursor-pointer"
                 title="Click to copy demo virtual API key"
               >
                 {copiedKey ? (
                   <>
-                    <Check className="w-3 h-3 text-metric-emerald" />
-                    <span className="text-metric-emerald">copied</span>
+                    <Check className="w-3.5 h-3.5 text-metric-emerald" />
+                    <span className="text-metric-emerald font-medium">Copied</span>
                   </>
                 ) : (
                   <>
-                    <Copy className="w-3 h-3 text-ink-muted" />
-                    <span>ig-demo-key</span>
+                    <Copy className="w-3.5 h-3.5 text-ink-muted" />
+                    <span className="font-mono text-[11px]">ig-demo-key</span>
                   </>
                 )}
               </button>
@@ -86,10 +86,10 @@ export default function App() {
                 href="https://github.com/karthikeyan2535/IntelliGate"
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center gap-1 px-2.5 py-1 rounded bg-app-subtle hover:bg-app-hover border border-app-border text-ink-secondary hover:text-ink-primary text-[11px] font-mono transition-colors"
+                className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-white hover:bg-app-subtle border border-app-border text-ink-secondary hover:text-ink-primary text-xs transition-colors"
               >
                 <span>GitHub</span>
-                <ExternalLink className="w-3 h-3 text-ink-muted" />
+                <ExternalLink className="w-3.5 h-3.5 text-ink-muted" />
               </a>
             </div>
           </div>
@@ -105,8 +105,8 @@ export default function App() {
                   onClick={() => setActiveTab(item.id)}
                   className={`h-10 px-3.5 text-xs font-medium flex items-center gap-2 border-b-2 transition-colors cursor-pointer ${
                     isActive
-                      ? 'border-metric-blue text-ink-primary bg-app-subtle/50'
-                      : 'border-transparent text-ink-muted hover:text-ink-secondary hover:bg-app-subtle/20'
+                      ? 'border-metric-blue text-ink-primary font-semibold'
+                      : 'border-transparent text-ink-muted hover:text-ink-secondary hover:border-app-border'
                   }`}
                 >
                   <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-metric-blue' : 'text-ink-muted'}`} />
@@ -127,16 +127,16 @@ export default function App() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-app-border bg-app-panel text-ink-muted text-[11px] py-4">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2 font-mono">
+      <footer className="border-t border-app-border bg-white text-ink-muted text-xs py-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-metric-emerald" />
-            <span>IntelliGate Core Gateway v1.0</span>
-            <span className="text-ink-faint">|</span>
-            <span>Port 8000 / 3000</span>
+            <span className="font-medium text-ink-secondary">IntelliGate Core Gateway v1.0</span>
+            <span className="text-ink-muted">•</span>
+            <span className="font-mono text-[11px]">Port 8000 / 3000</span>
           </div>
-          <div>
-            <span>Dynamic Pareto Routing • Empirical Benchmark Calibration</span>
+          <div className="text-[11px] text-ink-secondary">
+            Multi-Objective Pareto Routing • Empirical Benchmark Calibration
           </div>
         </div>
       </footer>
