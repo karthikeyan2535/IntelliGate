@@ -105,7 +105,7 @@ class CodeGenerator:
         )
 
         start_t = time.perf_counter()
-        resp = await provider.complete(req)
+        resp = await provider.chat_completion(req)
         latency_ms = int((time.perf_counter() - start_t) * 1000)
 
         raw_text = resp.content or ""
