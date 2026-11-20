@@ -98,6 +98,15 @@ export async function fetchCodingBenchmarkHistory(limit = 20) {
   return await request(`/coding/benchmarks/history?limit=${limit}`);
 }
 
+// Machine Learning Difficulty Prediction
+export async function predictDifficulty(payload) {
+  return await request('/coding/difficulty/predict', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+
 export async function fetchBaselineComparisons() {
   return await request('/coding/benchmarks/compare');
 }

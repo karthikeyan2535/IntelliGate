@@ -202,11 +202,17 @@ export default function RequestHistoryView({ onNavigate }) {
             {/* Modal Body */}
             <div className="p-4 overflow-y-auto space-y-4 text-xs">
               {/* Summary Stats */}
-              <div className="grid grid-cols-4 gap-px bg-app-border border border-app-border rounded-lg overflow-hidden text-center">
+              <div className="grid grid-cols-5 gap-px bg-app-border border border-app-border rounded-lg overflow-hidden text-center">
                 <div className="bg-app-bg p-2.5">
                   <span className="text-[10px] text-ink-secondary block">Attempts</span>
                   <span className="text-xs font-bold font-mono text-metric-blue mt-0.5 block">
                     {selectedSub.total_attempts}
+                  </span>
+                </div>
+                <div className="bg-app-bg p-2.5">
+                  <span className="text-[10px] text-ink-secondary block">CF Rating</span>
+                  <span className="text-xs font-bold font-mono text-purple-600 mt-0.5 block">
+                    {selectedSub.predicted_rating ? `CF ${selectedSub.predicted_rating}` : 'ML Rated'}
                   </span>
                 </div>
                 <div className="bg-app-bg p-2.5">

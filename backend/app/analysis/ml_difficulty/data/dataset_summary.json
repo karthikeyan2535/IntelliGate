@@ -1,0 +1,9 @@
+{
+  "total_rated": 9086,
+  "train_count": 6360,
+  "val_calibration_count": 1362,
+  "test_count": 1364,
+  "rating_min": 800,
+  "rating_max": 3500,
+  "rating_mean": 1858.95
+}

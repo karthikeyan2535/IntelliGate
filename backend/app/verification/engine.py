@@ -50,11 +50,21 @@ class VerificationEngine:
         start_time = datetime.datetime.now(datetime.timezone.utc)
 
         # ── Step 1: Problem Analysis ──────────────────────────────────────────
-        analysis = coding_analyzer.analyze(title, statement, constraints)
+        analysis = coding_analyzer.analyze(
+            title=title,
+            statement=statement,
+            constraints=constraints,
+            input_format=input_format,
+            output_format=output_format,
+        )
         trace_stages.append({
             "stage": "problem_analysis",
             "status": "completed",
-            "details": f"Classified task as '{analysis.task_type}' in domain '{analysis.algorithm_family}' (Difficulty: {analysis.difficulty}).",
+            "details": (
+                f"Classified task as '{analysis.task_type}' in domain '{analysis.algorithm_family}'. "
+                f"ML-Predicted Codeforces difficulty: {analysis.predicted_rating} "
+                f"[{analysis.lower_bound} - {analysis.upper_bound}] ({analysis.prediction_method})."
+            ),
             "metadata": analysis.model_dump(),
         })
 
@@ -108,6 +118,9 @@ class VerificationEngine:
                 cost_budget_usd=cost_budget_usd - total_cost if cost_budget_usd else None,
                 latency_budget_ms=latency_budget_ms - total_latency if latency_budget_ms else None,
                 excluded_models=excluded_models,
+                predicted_rating=analysis.predicted_rating,
+                lower_bound=analysis.lower_bound,
+                upper_bound=analysis.upper_bound,
             )
 
             if attempt_num == 1:
@@ -316,6 +329,10 @@ class VerificationEngine:
             "attempts": attempts_data,
             "trace": trace_stages,
             "analysis": analysis.model_dump(),
+            "predicted_rating": analysis.predicted_rating,
+            "lower_bound": analysis.lower_bound,
+            "upper_bound": analysis.upper_bound,
+            "prediction_method": analysis.prediction_method,
         }
 
 

@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import {
   Play, Plus, Trash2, Link as LinkIcon, AlertCircle, CheckCircle2,
   Copy, Check, RotateCcw, Terminal, ArrowRight, ShieldAlert,
-  Clock, DollarSign, Layers, ChevronDown, ChevronRight, FileCode
+  Clock, DollarSign, Layers, ChevronDown, ChevronRight, FileCode,
+  Sparkles, Calculator
 } from 'lucide-react';
-import { submitCodingProblem, importCodingProblem } from '../services/api';
+import { submitCodingProblem, importCodingProblem, predictDifficulty } from '../services/api';
 
 const PRESET_CODING_PROBLEMS = [
   {
@@ -64,6 +65,28 @@ export default function PlaygroundView() {
   const [copiedCode, setCopiedCode] = useState(false);
   const [selectedAttemptIdx, setSelectedAttemptIdx] = useState(0);
 
+  // ML Difficulty Prediction state
+  const [mlPrediction, setMlPrediction] = useState(null);
+  const [predictingDifficulty, setPredictingDifficulty] = useState(false);
+
+  // Live estimate difficulty using Sentence-BERT + LightGBM
+  async function handlePredictDifficulty() {
+    if (!statement.trim() || predictingDifficulty) return;
+    setPredictingDifficulty(true);
+    try {
+      const pred = await predictDifficulty({
+        title: title || 'Custom Problem',
+        statement,
+        constraints,
+      });
+      setMlPrediction(pred);
+    } catch (err) {
+      console.error('Difficulty estimation failed', err);
+    } finally {
+      setPredictingDifficulty(false);
+    }
+  }
+
   // Handle URL import
   async function handleImportUrl() {
     if (!urlInput.trim() || importing) return;
@@ -76,6 +99,9 @@ export default function PlaygroundView() {
       setConstraints(data.constraints || '');
       if (data.sample_test_cases?.length) {
         setTestCases(data.sample_test_cases);
+      }
+      if (data.predicted_rating) {
+        setMlPrediction(data);
       }
       setUrlInput('');
     } catch (err) {
@@ -110,6 +136,9 @@ export default function PlaygroundView() {
       });
       setResult(res);
       setSelectedAttemptIdx(res.attempts ? res.attempts.length - 1 : 0);
+      if (res.analysis?.predicted_rating || res.predicted_rating) {
+        setMlPrediction(res.analysis || res);
+      }
     } catch (err) {
       console.error('Execution error', err);
       setError(err.response?.data?.detail || err.message || 'Submission failed');
@@ -240,6 +269,52 @@ export default function PlaygroundView() {
                 placeholder="e.g. 1 <= N <= 10^5, Time limit: 2.0s"
                 className="w-full bg-app-subtle/30 border border-app-border rounded-md px-3 py-1.5 text-xs text-ink-primary font-mono focus:outline-none focus:border-metric-blue"
               />
+            </div>
+
+            {/* ML Difficulty Prediction Panel */}
+            <div className="bg-app-subtle/40 border border-app-border rounded-md p-2.5 text-xs space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 font-medium text-ink-primary">
+                  <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+                  <span>ML Difficulty Prediction</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handlePredictDifficulty}
+                  disabled={predictingDifficulty || !statement.trim()}
+                  className="px-2 py-0.5 bg-white hover:bg-slate-100 border border-app-border rounded text-[11px] font-medium text-ink-secondary hover:text-ink-primary flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
+                >
+                  <Calculator className={`w-3 h-3 ${predictingDifficulty ? 'animate-spin' : 'text-blue-500'}`} />
+                  <span>{predictingDifficulty ? 'Estimating...' : 'Estimate Rating'}</span>
+                </button>
+              </div>
+
+              {mlPrediction ? (
+                <div className="grid grid-cols-3 gap-2 pt-1.5 border-t border-app-border/60">
+                  <div className="bg-white p-2 rounded border border-app-border">
+                    <span className="text-[10px] text-ink-muted uppercase block">Predicted CF Rating</span>
+                    <span className="text-xs font-bold font-mono text-metric-blue mt-0.5 block">
+                      {mlPrediction.predicted_rating ? `CF ${mlPrediction.predicted_rating}` : 'N/A'}
+                    </span>
+                  </div>
+                  <div className="bg-white p-2 rounded border border-app-border">
+                    <span className="text-[10px] text-ink-muted uppercase block">80% Conf. Interval</span>
+                    <span className="text-xs font-bold font-mono text-ink-primary mt-0.5 block">
+                      [{mlPrediction.lower_bound || 800} - {mlPrediction.upper_bound || 3500}]
+                    </span>
+                  </div>
+                  <div className="bg-white p-2 rounded border border-app-border">
+                    <span className="text-[10px] text-ink-muted uppercase block">Prediction Method</span>
+                    <span className="text-[11px] font-medium text-ink-secondary mt-0.5 block truncate" title={mlPrediction.prediction_method}>
+                      {mlPrediction.prediction_method === 'official_codeforces' ? 'Official CF' : 'Sentence-BERT + LGBM'}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-[11px] text-ink-muted">
+                  Uses Sentence-BERT embeddings & LightGBM quantile regression to predict Codeforces difficulty and uncertainty intervals.
+                </p>
+              )}
             </div>
           </div>
 
@@ -429,13 +504,19 @@ export default function PlaygroundView() {
 
           {/* Telemetry Summary Ribbon */}
           {result && (
-            <div className="grid grid-cols-5 gap-px bg-app-border border border-app-border rounded-lg overflow-hidden text-center shadow-xs">
+            <div className="grid grid-cols-6 gap-px bg-app-border border border-app-border rounded-lg overflow-hidden text-center shadow-xs">
               <div className="bg-white p-2.5">
                 <span className="text-[10px] text-ink-secondary uppercase block font-medium">Outcome</span>
                 <span className={`text-xs font-bold mt-0.5 block ${
                   result.status === 'accepted' ? 'text-metric-emerald' : 'text-metric-rose'
                 }`}>
                   {result.status === 'accepted' ? 'ACCEPTED' : result.status.toUpperCase()}
+                </span>
+              </div>
+              <div className="bg-white p-2.5">
+                <span className="text-[10px] text-ink-secondary uppercase block font-medium">CF Rating</span>
+                <span className="text-xs font-bold font-mono text-purple-600 mt-0.5 block">
+                  {result.predicted_rating || result.analysis?.predicted_rating ? `CF ${result.predicted_rating || result.analysis?.predicted_rating}` : (result.analysis?.difficulty?.toUpperCase() || 'MEDIUM')}
                 </span>
               </div>
               <div className="bg-white p-2.5">

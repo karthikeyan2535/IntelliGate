@@ -160,26 +160,33 @@ class CodingProfileManager:
     """
 
     async def get_all_profiles(self) -> List[Dict[str, Any]]:
-        async with AsyncSessionLocal() as session:
-            stmt = select(CodingModelProfile)
-            res = await session.execute(stmt)
-            db_profiles = res.scalars().all()
-
-            if not db_profiles:
-                # Seed defaults into database
-                await self.seed_defaults()
+        try:
+            async with AsyncSessionLocal() as session:
+                stmt = select(CodingModelProfile)
                 res = await session.execute(stmt)
                 db_profiles = res.scalars().all()
 
-            return [self._to_dict(p) for p in db_profiles]
+                if not db_profiles:
+                    # Seed defaults into database
+                    await self.seed_defaults()
+                    res = await session.execute(stmt)
+                    db_profiles = res.scalars().all()
+
+                return [self._to_dict(p) for p in db_profiles]
+        except Exception:
+            # Fallback to in-memory profiles when DB connection is unavailable
+            return list(DEFAULT_EMPIRICAL_CODING_PROFILES.values())
 
     async def get_profile(self, model_id: str) -> Optional[Dict[str, Any]]:
-        async with AsyncSessionLocal() as session:
-            stmt = select(CodingModelProfile).where(CodingModelProfile.model_id == model_id)
-            res = await session.execute(stmt)
-            p = res.scalar_one_or_none()
-            if p:
-                return self._to_dict(p)
+        try:
+            async with AsyncSessionLocal() as session:
+                stmt = select(CodingModelProfile).where(CodingModelProfile.model_id == model_id)
+                res = await session.execute(stmt)
+                p = res.scalar_one_or_none()
+                if p:
+                    return self._to_dict(p)
+                return DEFAULT_EMPIRICAL_CODING_PROFILES.get(model_id)
+        except Exception:
             return DEFAULT_EMPIRICAL_CODING_PROFILES.get(model_id)
 
     async def seed_defaults(self) -> None:

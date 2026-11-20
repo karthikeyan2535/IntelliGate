@@ -31,8 +31,11 @@ def test_analyzer_algorithm_families():
 def test_analyzer_difficulty_bounds():
     hard_text = "Solve puzzle for n <= 20 with backtracking."
     res_hard = coding_analyzer.analyze("N Queens", hard_text, "n <= 20")
-    assert res_hard.difficulty == "hard"
     assert res_hard.algorithm_family == "backtracking"
+    assert res_hard.predicted_rating is not None
+    assert res_hard.lower_bound is not None
+    assert res_hard.upper_bound is not None
+    assert res_hard.lower_bound <= res_hard.predicted_rating <= res_hard.upper_bound
 
 
 @pytest.mark.asyncio

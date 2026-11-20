@@ -77,7 +77,43 @@ class BenchmarkRunRequest(BaseModel):
     language: str = "python"
 
 
+class PredictDifficultyRequest(BaseModel):
+    title: str = "Problem"
+    statement: str
+    constraints: Optional[str] = ""
+    input_format: Optional[str] = ""
+    output_format: Optional[str] = ""
+    official_rating: Optional[int] = None
+    time_limit_ms: Optional[int] = None
+    memory_limit_mb: Optional[int] = None
+
+
 # ── Problem Ingestion Endpoints ───────────────────────────────────────────────
+
+
+@router.post("/difficulty/predict", summary="Predict Codeforces difficulty and uncertainty intervals using ML")
+async def predict_difficulty_endpoint(req: PredictDifficultyRequest) -> Dict[str, Any]:
+    analysis = coding_analyzer.analyze(
+        title=req.title,
+        statement=req.statement,
+        constraints=req.constraints,
+        input_format=req.input_format,
+        output_format=req.output_format,
+        official_rating=req.official_rating,
+        time_limit_ms=req.time_limit_ms,
+        memory_limit_mb=req.memory_limit_mb,
+    )
+    return {
+        "predicted_rating": analysis.predicted_rating,
+        "lower_bound": analysis.lower_bound,
+        "upper_bound": analysis.upper_bound,
+        "confidence_width": analysis.confidence_width,
+        "difficulty_tier": analysis.difficulty,
+        "prediction_method": analysis.prediction_method,
+        "algorithm_family": analysis.algorithm_family,
+        "confidence": analysis.confidence,
+        "reasoning": analysis.reasoning,
+    }
 
 
 @router.post("/problems/import", summary="Import a problem from Codeforces or LeetCode")
@@ -85,7 +121,16 @@ async def import_problem(req: ImportProblemRequest) -> Dict[str, Any]:
     try:
         data = await problem_importer.import_from_url(req.url)
         # Analyze category and difficulty automatically
-        analysis = coding_analyzer.analyze(data.title, data.statement, data.constraints)
+        analysis = coding_analyzer.analyze(
+            title=data.title,
+            statement=data.statement,
+            constraints=data.constraints,
+            input_format=data.input_format,
+            output_format=data.output_format,
+            official_rating=data.official_rating,
+            time_limit_ms=data.time_limit_ms,
+            memory_limit_mb=data.memory_limit_mb,
+        )
 
         # Store in database
         async with AsyncSessionLocal() as session:
@@ -127,6 +172,11 @@ async def import_problem(req: ImportProblemRequest) -> Dict[str, Any]:
                 "output_format": data.output_format,
                 "algorithm_category": analysis.algorithm_family,
                 "difficulty": prob.difficulty,
+                "predicted_rating": analysis.predicted_rating,
+                "lower_bound": analysis.lower_bound,
+                "upper_bound": analysis.upper_bound,
+                "confidence_width": analysis.confidence_width,
+                "prediction_method": analysis.prediction_method,
                 "sample_test_cases": data.sample_test_cases,
                 "source": data.source,
                 "source_url": data.source_url,
@@ -139,7 +189,13 @@ async def import_problem(req: ImportProblemRequest) -> Dict[str, Any]:
 
 @router.post("/problems", summary="Manually create a coding problem")
 async def create_problem(req: CreateProblemRequest) -> Dict[str, Any]:
-    analysis = coding_analyzer.analyze(req.title, req.statement, req.constraints)
+    analysis = coding_analyzer.analyze(
+        title=req.title,
+        statement=req.statement,
+        constraints=req.constraints,
+        input_format=req.input_format,
+        output_format=req.output_format,
+    )
     cat = req.algorithm_category if req.algorithm_category != "other" else analysis.algorithm_family
 
     async with AsyncSessionLocal() as session:
@@ -173,6 +229,10 @@ async def create_problem(req: CreateProblemRequest) -> Dict[str, Any]:
             "title": prob.title,
             "algorithm_category": prob.algorithm_category,
             "difficulty": prob.difficulty,
+            "predicted_rating": analysis.predicted_rating,
+            "lower_bound": analysis.lower_bound,
+            "upper_bound": analysis.upper_bound,
+            "prediction_method": analysis.prediction_method,
             "analysis": analysis.model_dump(),
         }
 

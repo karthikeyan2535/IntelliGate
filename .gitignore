@@ -63,3 +63,9 @@ Desktop.ini
 *.swp
 *.swo
 
+# ML Difficulty Dataset & Caches
+backend/app/analysis/ml_difficulty/data/*.csv
+backend/app/analysis/ml_difficulty/data/*.npz
+backend/app/analysis/ml_difficulty/artifacts/embedding_cache.pkl
+
+

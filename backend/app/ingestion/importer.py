@@ -23,6 +23,7 @@ class ImportedProblemData(BaseModel):
     time_limit_ms: int = 2000
     memory_limit_mb: int = 256
     estimated_difficulty: str = "medium"
+    official_rating: Optional[int] = None
     is_leetcode_style: bool = False
     function_signature: Optional[str] = None
 
@@ -123,6 +124,15 @@ class ProblemImporter:
                     out_text = "\n".join([line.strip() for line in pre_out.get_text().splitlines() if line.strip()]) + "\n"
                     sample_tests.append({"input": in_text, "expected": out_text})
 
+        # Official rating from problem tags if visible on page
+        official_rating = None
+        for tag_elem in soup.find_all("span", class_="tag-box"):
+            txt = tag_elem.get_text().strip()
+            m_r = re.search(r"^\*(\d+)$", txt)
+            if m_r:
+                official_rating = int(m_r.group(1))
+                break
+
         return ImportedProblemData(
             title=title,
             statement=statement,
@@ -135,6 +145,7 @@ class ProblemImporter:
             time_limit_ms=time_limit_ms,
             memory_limit_mb=mem_limit_mb,
             estimated_difficulty="medium",
+            official_rating=official_rating,
             is_leetcode_style=False,
         )
 

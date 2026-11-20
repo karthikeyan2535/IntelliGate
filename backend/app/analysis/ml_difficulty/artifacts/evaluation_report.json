@@ -1,0 +1,57 @@
+{
+  "test_sample_count": 1364,
+  "models_evaluated": {
+    "mean_baseline": {
+      "name": "Training Mean Baseline",
+      "mae": 687.69,
+      "rmse": 800.93,
+      "spearman_rho": 0.0,
+      "tier_accuracy": 0.1848
+    },
+    "structured_only_lgbm": {
+      "name": "Structured Features Only LightGBM",
+      "mae": 513.15,
+      "rmse": 625.89,
+      "spearman_rho": 0.6689,
+      "tier_accuracy": 0.426
+    },
+    "sentence_bert_lightgbm": {
+      "name": "IntelliGate Proposed (Sentence-BERT + Structured + Calibrated Quantiles)",
+      "mae": 494.82,
+      "rmse": 600.31,
+      "spearman_rho": 0.6929,
+      "tier_accuracy": 0.4076,
+      "raw_interval_coverage": 0.5367,
+      "raw_interval_width": 1252.2,
+      "calibrated_interval_coverage": 0.7852,
+      "calibrated_interval_width": 1742.2,
+      "calibration_delta": 245.0
+    }
+  },
+  "per_tier_breakdown": {
+    "Div 3 (Easy, <1400)": {
+      "count": 499,
+      "mae": 594.88,
+      "rmse": 661.42,
+      "coverage_80": 0.6413
+    },
+    "Div 2 (Medium, 1400-1899)": {
+      "count": 252,
+      "mae": 350.91,
+      "rmse": 439.04,
+      "coverage_80": 0.9563
+    },
+    "Div 1 (Hard, 1900-2399)": {
+      "count": 237,
+      "mae": 297.59,
+      "rmse": 361.99,
+      "coverage_80": 1.0
+    },
+    "Master+ (Extreme, >=2400)": {
+      "count": 376,
+      "mae": 582.79,
+      "rmse": 717.6,
+      "coverage_80": 0.7261
+    }
+  }
+}
